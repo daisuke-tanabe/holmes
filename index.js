@@ -22,7 +22,7 @@ const getBranches = () => {
     projects.forEach((project) => {
       const { id, name, web_url } = project;
       const branchesData = execSync(`curl -s https://${config.gitlab.domain}/api/v4/projects/${id}/repository/branches?${token}`).toString();
-      const branches = JSON.parse(branchesData).map(({ name, merged, commit }) => ({ name, merged, author: commit['author_name'] }));
+      const branches = JSON.parse(branchesData).map(({ name, merged, commit }) => ({ name, merged, author: commit.author_name }));
 
       result.push({
         id,
@@ -37,10 +37,10 @@ const getBranches = () => {
   // マージされていないブランチをコンソールに表示する
   projects.forEach((project) => {
     const { id, name, web_url, branches } = project;
-    const unmergedBranches = branches.filter(({ merged }) => !merged);
+    const unmergedBranches = branches.filter(({ merged }) => merged);
 
     console.log(`[${id}] ${name}`);
-    console.log(' Unmerged branches');
+    console.log(' merged branches');
     unmergedBranches.forEach(branch => {
       const { name, author } = branch;
       console.log(` - ${name} (Author: ${author})`);
