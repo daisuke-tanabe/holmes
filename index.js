@@ -7,7 +7,9 @@ const { execSync } = require('child_process');
 const token = `private_token=${config.gitlab.token}`;
 
 // TODO ブランチを取得するという名の、マージされていないブランチを表示するという曖昧さ
-const getBranches = () => {
+const getBranches = (argv) => {
+  // const { merged, m, unmerged, u } = argv;
+
   // 自身のアカウントに紐づいているgroupsのデータを取得する
   const groupsData = execSync(`curl -s https://${config.gitlab.domain}/api/v4/groups?${token}`).toString();
 
@@ -34,34 +36,58 @@ const getBranches = () => {
     return result;
   }, []);
 
-  // マージされていないブランチをコンソールに表示する
   projects.forEach((project) => {
     const { id, name, web_url, branches } = project;
-    const unmergedBranches = branches.filter(({ merged }) => merged);
+    const mergedBranches = branches.filter(({ merged }) => merged);
+    const unmergedBranches = branches.filter(({ merged }) => !merged);
 
-    console.log(`[${id}] ${name}`);
+    console.log(`[${id}] ${name} - ${web_url}`);
+
+    // マージされているブランチを表示する
     console.log(' merged branches');
+    mergedBranches.forEach(branch => {
+      const { name, author } = branch;
+      console.log(` - ${name} (Author: ${author})`);
+    });
+
+    // マージされていないブランチを表示する
+    console.log('\n unmerged branches');
     unmergedBranches.forEach(branch => {
       const { name, author } = branch;
       console.log(` - ${name} (Author: ${author})`);
     });
-    console.log(`${web_url}\n`);
+
+    console.log('\n==================================================\n');
   });
 };
 
 // TODO オプションなどで増やすなどしたほうが命名もよさそう
-const branch = {
-  command: 'branch',
-  aliases: ['b'],
+const gitlab = {
+  command: 'gitlab',
   desc: 'チームが抱えているGitlabのリポジトリからトピックブランチを取得',
+  builder: yargs => {
+    yargs.options({
+      merged: {
+        alias: 'm',
+        default: false,
+        describe: '"merged branches"を表示する'
+      },
+      unmerged: {
+        alias: 'u',
+        default: false,
+        describe: '"unmerged branches"を表示する'
+      }
+    });
+  },
   handler: argv => {
-    getBranches();
+    console.log(argv);
+    getBranches(argv);
   }
 };
 
 // 一応コマンドが追加できる余地は残してみた
 yargs
-  .command(branch)
+  .command(gitlab)
   .version('version', 'バージョン情報の表示', `v${pkg.version}`).alias('v', 'version')
   .help('help', 'ヘルプの表示').alias('h', 'help')
   .argv;
