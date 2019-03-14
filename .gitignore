@@ -207,4 +207,6 @@ $RECYCLE.BIN/
 
 # gitkeep
 !.gitkeep
-ª
+
+# example
+holmes.config.json
