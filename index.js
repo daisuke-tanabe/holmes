@@ -37,25 +37,27 @@ const getBranches = (argv) => {
   }, []);
 
   projects.forEach((project) => {
-    const { id, name, web_url, branches } = project;
+    const { name, web_url, branches } = project;
     const mergedBranches = branches.filter(({ merged }) => merged);
     const unmergedBranches = branches.filter(({ merged }) => !merged);
 
-    console.log(`[${id}] ${name} - ${web_url}`);
+    console.log(`▼ ${name}`);
 
     // マージされているブランチを表示する
-    console.log(' merged branches');
+    console.log('\n[merged branches]');
     mergedBranches.forEach(branch => {
       const { name, author } = branch;
-      console.log(` - ${name} (Author: ${author})`);
+      console.log(`- ${name} (Author: ${author})`);
     });
 
     // マージされていないブランチを表示する
-    console.log('\n unmerged branches');
+    console.log('\n[unmerged branches]');
     unmergedBranches.forEach(branch => {
       const { name, author } = branch;
-      console.log(` - ${name} (Author: ${author})`);
+      console.log(`- ${name} (Author: ${author})`);
     });
+
+    console.log(`\n${web_url}`);
 
     console.log('\n==================================================\n');
   });
