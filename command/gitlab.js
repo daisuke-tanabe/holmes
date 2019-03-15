@@ -81,7 +81,7 @@ const commandHandler = (options) => {
   console.log('\n==================================================\n');
 
   if (_delete) {
-    (async () => {;
+    (async () => {
       for (const project of projects) {
         const { id, name, web_url, branches } = project;
 
