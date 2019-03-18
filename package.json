@@ -8,7 +8,7 @@
   },
   "scripts": {
     "build": "tsc",
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "jest",
     "type-check": "tsc --watch --noEmit"
   },
   "engines": {
@@ -22,5 +22,10 @@
     "prompts": "^2.0.3",
     "typescript": "^3.3.3333",
     "yargs": "^13.2.2"
+  },
+  "devDependencies": {
+    "@types/jest": "^24.0.11",
+    "jest": "^24.5.0",
+    "ts-jest": "^24.0.0"
   }
 }
