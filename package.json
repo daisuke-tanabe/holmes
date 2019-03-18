@@ -4,9 +4,10 @@
   "description": "",
   "main": "index.js",
   "bin": {
-    "holmes": "./index.js"
+    "holmes": "./dist/index.js"
   },
   "scripts": {
+    "build": "tsc",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "engines": {
@@ -15,7 +16,10 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@types/node": "^11.11.3",
+    "@types/yargs": "^12.0.9",
     "prompts": "^2.0.3",
+    "typescript": "^3.3.3333",
     "yargs": "^13.2.2"
   }
 }

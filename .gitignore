@@ -210,3 +210,6 @@ $RECYCLE.BIN/
 
 # example
 holmes.config.json
+
+# map
+*.map

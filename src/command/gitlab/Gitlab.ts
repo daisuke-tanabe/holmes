@@ -1,4 +1,4 @@
-const config = require('../../holmes.config.json');
+const config = require('../../../holmes.config.json');
 const { execSync } = require('child_process');
 const querystring = require('querystring');
 const prompts = require("prompts");
