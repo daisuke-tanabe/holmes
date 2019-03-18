@@ -7,6 +7,7 @@
     "holmes": "./dist/index.js"
   },
   "scripts": {
+    "dev": "tsc --watch",
     "build": "tsc",
     "test": "jest",
     "type-check": "tsc --watch --noEmit"
