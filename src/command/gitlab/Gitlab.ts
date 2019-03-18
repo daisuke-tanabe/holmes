@@ -6,34 +6,97 @@ const prompts = require("prompts");
 const API_V4 = `https://${config.gitlab.domain}/api/v4`;
 const QUERY_PRIVATE_TOKEN = `private_token=${config.gitlab.token}`;
 
-class Gitlab {
-  constructor(options) {
+interface GroupData {
+  id: number
+  name: string
+  path: string
+  description: string
+  visibility: string
+  lfs_enabled: boolean
+  avatar_url: string
+  web_url: string
+  request_access_enabled: boolean
+  full_name: string
+  full_path: string
+  file_template_project_id: number
+  parent_id: null
+}
+
+interface BranchData {
+  name: string
+  merged: boolean
+  protected: boolean
+  author: string
+  commit: {
+    author_email: string
+    author_name: string
+    authored_date: string
+    committed_date: string
+    committer_email: string
+    committer_name: string
+    id: string
+    short_id: string
+    title: string
+    message: string
+    parent_ids: string[]
+  }
+}
+
+interface Branch {
+  name: string
+  merged: boolean
+  preserved: boolean
+  author: string
+}
+
+interface Project {
+  id: number
+  name: string
+  web_url: string
+  branches: Branch[]
+}
+
+interface Options {
+  remove: boolean
+  merged: boolean
+  unmerged: boolean
+}
+
+export default class Gitlab {
+  private _options!: Options;
+
+  constructor(options: Options) {
     this.options = options;
 
-    const groupsData = this.fetchSync('/groups');
+    const groupsData = Gitlab.fetchSync('/groups');
     const projects = this.createProjects(groupsData);
+
     console.log('\n==================================================\n');
-    if (this.options.delete) {
-      this.deleteBranches(projects);
-    } else {
-      this.printResult(projects);
-    }
+    this.options.remove ? this.deleteBranches(projects) : this.printResult(projects);
   }
 
-  fetchSync(entryPoint) {
+  get options(): Options {
+    return this._options;
+  }
+
+  set options(options: Options) {
+    this._options = options;
+  }
+
+  static fetchSync(entryPoint: string) {
     const url = `${API_V4}${entryPoint}?${QUERY_PRIVATE_TOKEN}`;
     const data = execSync(`curl -s ${url}`).toString();
     return JSON.parse(data);
   }
 
-  deleteSync(entryPoint) {
+  static deleteSync(entryPoint: string) {
     const url = `${API_V4}${entryPoint}?${QUERY_PRIVATE_TOKEN}`;
     return execSync(`curl -s -X DELETE ${url}`).toString();
   }
 
-  createProjects(groupsData) {
-    const filterBranches = (branches) => {
-      return branches.filter((branch) => {
+  createProjects(groupsData: GroupData[]): Project[] {
+    const filterBranches = (branches: BranchData[]): BranchData[] => {
+      return branches.filter((branch: BranchData) => {
         const { merged } = branch;
         if (this.options.merged) return merged;
         if (this.options.unmerged) return !merged;
@@ -41,16 +104,16 @@ class Gitlab {
       })
     };
 
-    return groupsData.map(({id}) => id).reduce((result, id) => {
-      const projects = this.fetchSync(`/groups/${id}`).projects;
+    return groupsData.map(({ id }: { id: number }) => id).reduce((result: Project[], id: number) => {
+      const projects = Gitlab.fetchSync(`/groups/${id}`).projects;
 
-      projects.forEach((project) => {
+      projects.forEach((project:Project) => {
         const { id, name, web_url } = project;
-        const branchesData = this.fetchSync(`/projects/${id}/repository/branches`);
-        const branches = branchesData.map(({ name, merged, protected: _protected, commit }) => ({
+        const branchesData = Gitlab.fetchSync(`/projects/${id}/repository/branches`);
+        const branches = branchesData.map(({ name, merged, protected: preserved, commit }: BranchData) => ({
           name,
           merged,
-          _protected,
+          preserved,
           author: commit.author_name
         }));
         const shouldFilter = !(this.options.merged === this.options.unmerged);
@@ -67,7 +130,7 @@ class Gitlab {
     }, []);
   }
 
-  printResult(projects) {
+  printResult(projects: Project[]) {
     const createBranchesLabel = () => {
       if (this.options.merged) return 'Merged';
       if (this.options.unmerged) return 'Unmerged';
@@ -89,16 +152,16 @@ class Gitlab {
     });
   };
 
-  deleteBranches(projects) {
+  deleteBranches(projects: Project[]) {
     (async () => {
       for (const project of projects) {
         const { id, name, web_url, branches } = project;
 
         console.log(`▼ ${name}`);
-        const ignoredProtectedBranches = branches.filter(({ _protected, merged }) => (!_protected && merged));
+        const ignoredProtectedBranches = branches.filter(({ preserved, merged }: { preserved: boolean, merged: boolean }) => (!preserved && merged));
 
         if (ignoredProtectedBranches.length !== 0) {
-          const choicesBranches = ignoredProtectedBranches.map(branch => {
+          const choicesBranches = ignoredProtectedBranches.map((branch: { name: string, author: string}) => {
             const { name, author } = branch;
             return {
               title: `${name} - ${author}`,
@@ -109,18 +172,18 @@ class Gitlab {
           const question = [
             {
               type: "multiselect",
-              name: 'branches',
+              name: 'branchesName',
               message: '削除するブランチをスペースで選択してエンターで決定してください',
               choices: choicesBranches
             }
           ];
           const response = await prompts(question);
           // 削除コマンドテスト
-          response.branches.forEach((branch) => {
-            const result = this.deleteSync(`/projects/${id}/repository/branches/${querystring.escape(branch)}`);
+          response.branchesName.forEach((branchName: string) => {
+            const result = Gitlab.deleteSync(`/projects/${id}/repository/branches/${querystring.escape(branchName)}`);
             // 文字列でundefinedを受け取るので注意
             (result === 'undefined') ?
-              console.log(`${branch} を削除しました`) :
+              console.log(`${branchName} を削除しました`) :
               console.log(`${result.error} 削除に失敗しました`);
           })
         } else {
@@ -132,5 +195,3 @@ class Gitlab {
     })();
   }
 }
-
-module.exports = Gitlab;
