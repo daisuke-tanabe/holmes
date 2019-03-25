@@ -1,9 +1,15 @@
-import Gitlab from './Gitlab';
+/**
+ * node_modules
+ * -------------------------------------------------- */
+import Gitlab, { Options } from './Gitlab';
 import { Argv } from 'yargs';
 
+/**
+ * command scheme
+ * -------------------------------------------------- */
 module.exports = {
   command: 'gitlab',
-  desc: 'チームが抱えているGitlabのリポジトリからトピックブランチを取得',
+  desc: 'Gitlabの操作を行う',
   builder: (yargs: Argv) => {
     yargs.options({
       remove: {
@@ -26,7 +32,7 @@ module.exports = {
       }
     });
   },
-  handler: ({ remove, merged, unmerged }: { remove: boolean, merged: boolean, unmerged: boolean }) => {
+  handler: ({ remove, merged, unmerged }: Options) => {
     new Gitlab({ remove, merged, unmerged });
   }
 };

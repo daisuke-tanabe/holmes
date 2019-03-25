@@ -1,8 +1,15 @@
 #!/usr/bin/env node
+
+/**
+ * node_modules
+ * -------------------------------------------------- */
 const yargs = require('yargs');
 const pkg = require('../package.json');
 const gitlab = require('./command/gitlab');
 
+/**
+ * yargs
+ * -------------------------------------------------- */
 yargs
   .command(gitlab)
   .version('version', 'バージョン情報の表示', `v${pkg.version}`).alias('v', 'version')
