@@ -1,9 +1,9 @@
 /**
  * node_modules
  * -------------------------------------------------- */
-const config = require('../../../holmes.config.json');
-const { execSync } = require('child_process');
+const util = require('util');
 const querystring = require('querystring');
+const exec = util.promisify(require('child_process').exec);
 const prompts = require("prompts");
 
 /**
@@ -15,16 +15,18 @@ export interface Options {
   unmerged: boolean
 }
 
+interface Branch {
+  name: string
+  merged: boolean
+  commit: {
+    author_name: string
+  }
+}
+
 interface MappedProject {
   id: number
   name: string
-  branches: Array<{
-    name: string
-    merged: boolean
-    commit: {
-      author_name: string
-    }
-  }>
+  branches: PromiseLike<string>
 }
 
 interface Config {
@@ -33,12 +35,14 @@ interface Config {
   projects: Array<{id: number, name: string}>
 }
 
+
 /**
  * Gitlab
  * -------------------------------------------------- */
+const config = require('../../../holmes.config.json');
 const API_V4 = `https://${config.gitlab.domain}/api/v4`;
 const QUERY_PRIVATE_TOKEN = `private_token=${config.gitlab.token}`;
-const DOUBLE_BORDER = '\n==================================================\n';
+const DOUBLE_BORDER = '==================================================';
 
 export default class Gitlab {
   config: Config;
@@ -51,10 +55,13 @@ export default class Gitlab {
    *
    * @param {string} entryPoint - Gitlab API(https://docs.gitlab.com/ee/api/)
    */
-  static fetchSync(entryPoint: string) {
+  fetchAsync(entryPoint: string): PromiseLike<any> {
     const url = `${API_V4}${entryPoint}?${QUERY_PRIVATE_TOKEN}`;
-    const data = execSync(`curl -s ${url}`).toString();
-    return JSON.parse(data);
+    return new Promise((resolve, reject) => {
+      exec(`curl -s ${url}`, (err: Error, stdout: string | Buffer, stderr: string | Buffer) => {
+        !err ? resolve(stdout): reject(stderr);
+      });
+    });
   }
 
   /**
@@ -63,9 +70,13 @@ export default class Gitlab {
    *
    * @param {string} entryPoint - Gitlab API(https://docs.gitlab.com/ee/api/)
    */
-  static deleteSync(entryPoint: string) {
+  deleteAsync(entryPoint: string) {
     const url = `${API_V4}${entryPoint}?${QUERY_PRIVATE_TOKEN}`;
-    return execSync(`curl -s -X DELETE ${url}`).toString();
+    return new Promise((resolve, reject) => {
+      exec(`curl -s -X DELETE ${url}`, (err: Error, stdout: string | Buffer, stderr: string | Buffer) => {
+        !err ? resolve(stdout): reject(stderr);
+      });
+    });
   }
 
   constructor(options: Options) {
@@ -81,10 +92,12 @@ export default class Gitlab {
    * @param {Config} config - this.config
    */
   mappingProjects(config: Config) {
-    return config.projects.map(({ id, name }) => {
-      const branches = Gitlab.fetchSync(`/projects/${id}/repository/branches`);
-      return { id, name, branches };
-    });
+    const mappedProjects = [];
+    for (const { id, name } of config.projects) {
+      const branches = this.fetchAsync(`/projects/${id}/repository/branches`);
+      mappedProjects.push({ id, name, branches });
+    }
+    return mappedProjects;
   }
 
   /**
@@ -92,33 +105,29 @@ export default class Gitlab {
    *
    * @param {Array<MappedProject>>} mappedProjects - マッピングされたプロジェクト
    */
-  printResult(mappedProjects: Array<MappedProject>) {
-    console.log('\n==================================================\n');
-
+  async printResult(mappedProjects: Array<MappedProject>) {
+    console.log(`\n${DOUBLE_BORDER}\n`);
     const createBranchesLabel = () => {
       if (this.options.merged) return 'Merged';
       if (this.options.unmerged) return 'Unmerged';
       return 'All';
     };
     const branchesLabel = `${createBranchesLabel()} branches`;
-
-    mappedProjects.forEach((project) => {
+    for (const project of mappedProjects) {
       const { name, branches } = project;
+      const branchesData = await branches.then((data) => JSON.parse(data));
       console.log(`▼ ${name}`);
       console.log(`\n[${branchesLabel}]`);
-
-      const filteredBranches = branches.filter(({ merged }) => {
+      const filteredBranches = branchesData.filter(({ merged }: Branch) => {
         if (this.options.merged) return merged;
         if (this.options.unmerged) return !merged;
         return true;
       });
-
-      filteredBranches.forEach(({ name, commit }) => {
+      filteredBranches.forEach(({ name, commit }: Branch) => {
         console.log(`- ${name} (Author: ${commit.author_name})`);
       });
-
-      console.log('\n==================================================\n');
-    });
+      console.log(`\n${DOUBLE_BORDER}\n`);
+    }
   }
 
   /**
@@ -126,35 +135,29 @@ export default class Gitlab {
    *
    * @param {Array<MappedProject>} mappedProjects - マッピングされたプロジェクト
    */
-  deleteBranches(mappedProjects: Array<MappedProject>) {
-    (async () => {
-      for (const { id, name, branches } of mappedProjects) {
-        console.log(`▼ ${name}`);
-        if (branches.length === 0) {
-          console.log(`Not branches${DOUBLE_BORDER}`);
-          continue;
-        }
-
-        const choicesBranches = branches.map(({ name, merged, commit }) => ({
-          title: `[${merged ? 'Merged' : 'Unmerged'} branch]${name} - ${commit.author_name}`,
-          value: name,
-        }));
-        const question = [{
-          type: 'multiselect',
-          name: 'branchesName',
-          message: 'スペースで選択（複数可）、エンターで選択されたブランチを削除する',
-          choices: choicesBranches
-        }];
-        const response = await prompts(question);
-        response.branchesName.forEach((branchName: string) => {
-          const result = Gitlab.deleteSync(`/projects/${id}/repository/branches/${querystring.escape(branchName)}`);
-          // 文字列でundefinedを受け取るので注意
-          (result === 'undefined') ?
-            console.log(`${branchName} を削除しました`) :
-            console.log(`${result.error} 削除に失敗しました`);
-          });
-        console.log(DOUBLE_BORDER);
+  async deleteBranches(mappedProjects: Array<MappedProject>) {
+    console.log(`\n${DOUBLE_BORDER}\n`);
+    for (const {id, name, branches} of mappedProjects) {
+      console.log(`▼ ${name}`);
+      const branchesData = await branches.then((data) => JSON.parse(data));
+      const choicesBranches = branchesData.map(({ name, merged, commit }: Branch) => ({
+        title: `[${merged ? 'Merged' : 'Unmerged'} branch]${name} - ${commit.author_name}`,
+        value: name,
+      }));
+      const question = [{
+        type: 'multiselect',
+        name: 'branchesName',
+        message: 'スペースで選択（複数可）、エンターで選択されたブランチを削除する',
+        choices: choicesBranches
+      }];
+      const { branchesName } = await prompts(question);
+      for (const branchName of branchesName) {
+        const data = this.deleteAsync(`/projects/${id}/repository/branches/${querystring.escape(branchName)}`);
+        await data.then(() => {
+          console.log(`Deleted: ${branchName}`);
+        });
       }
-    })();
+      console.log(`\n${DOUBLE_BORDER}\n`);
+    }
   }
 }
