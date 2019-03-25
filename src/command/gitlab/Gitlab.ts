@@ -99,12 +99,13 @@ export default class Gitlab {
   }
 
   /**
-   * プロジェクト（リポジトリ）毎にブランチを表示する
+   * プロジェクト毎にブランチを表示する
    *
    * @param {Array<MappedProject>>} mappedProjects - マッピングされたプロジェクト
    */
   public async printResult(mappedProjects: MappedProject[]) {
     process.stdout.write(`\n${DOUBLE_BORDER}\n`);
+
     const createBranchesLabel = () => {
       if (this.options.merged) {
         return 'Merged';
@@ -115,11 +116,18 @@ export default class Gitlab {
       return 'All';
     };
     const branchesLabel = `${createBranchesLabel()} branches`;
+
+    // プロジェクト毎にループしてブランチを表示する
     for (const project of mappedProjects) {
       const { name, branches } = project;
+
+      // プロジェクトに紐付いたブランチデータを取得
       const branchesData = await branches.then((data) => JSON.parse(data));
+
       process.stdout.write(`▼ ${name}`);
       process.stdout.write(`\n[${branchesLabel}]`);
+
+      // オプションの条件でブランチデータをフィルタリングする
       const filteredBranches = branchesData.filter(({ merged }: Branch) => {
         if (this.options.merged) {
           return merged;
@@ -129,27 +137,37 @@ export default class Gitlab {
         }
         return true;
       });
+
       filteredBranches.forEach(({ name: branchName, commit }: Branch) => {
         process.stdout.write(`- ${branchName} (Author: ${commit.author_name})`);
       });
+
       process.stdout.write(`\n${DOUBLE_BORDER}\n`);
     }
   }
 
   /**
-   * プロジェクト（リポジトリ）毎にブランチの削除を行う
+   * プロジェクト毎にブランチの削除を行う
    *
    * @param {Array<MappedProject>} mappedProjects - マッピングされたプロジェクト
    */
   public async deleteBranches(mappedProjects: MappedProject[]) {
     process.stdout.write(`\n${DOUBLE_BORDER}\n`);
+
+    // プロジェクト毎にループしてブランチを表示する
     for (const { id, name, branches } of mappedProjects) {
       process.stdout.write(`▼ ${name}`);
+
+      // プロジェクトに紐付いたブランチデータを取得
       const branchesData = await branches.then((data) => JSON.parse(data));
+
+      // 選択用ブランチを作成する
       const choicesBranches = branchesData.map(({ name: branchName, merged, commit }: Branch) => ({
         title: `[${merged ? 'Merged' : 'Unmerged'} branch]${branchName} - ${commit.author_name}`,
         value: branchName,
       }));
+
+      // 対話形式の設定と対話の開始
       const question = [
         {
           choices: choicesBranches,
@@ -159,12 +177,15 @@ export default class Gitlab {
         },
       ];
       const { branchesName } = await prompts(question);
+
+      // 対話で選択されたブランチを削除する処理
       for (const branchName of branchesName) {
         const data = this.deleteAsync(`/projects/${id}/repository/branches/${querystring.escape(branchName)}`);
         await data.then(() => {
           process.stdout.write(`Deleted: ${branchName}`);
         });
       }
+
       process.stdout.write(`\n${DOUBLE_BORDER}\n`);
     }
   }
