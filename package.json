@@ -7,12 +7,12 @@
     "holmes": "./dist/index.js"
   },
   "scripts": {
-    "dev": "tsc --watch",
     "build": "tsc",
-    "test": "jest",
-    "type-check": "tsc --watch --noEmit",
+    "dev": "tsc --watch",
+    "fix": "tslint --fix --project ./tsconfig.json ./src/**/*.ts",
     "lint": "tslint --project ./tsconfig.json ./src/**/*.ts",
-    "fix": "tslint --fix --project ./tsconfig.json ./src/**/*.ts"
+    "test": "jest",
+    "type-check": "tsc --watch --noEmit"
   },
   "engines": {
     "node": "10.15.3"
@@ -20,22 +20,32 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@types/mz": "0.0.32",
-    "@types/node": "^11.11.3",
-    "@types/prompts": "^1.2.0",
-    "@types/yargs": "^12.0.9",
     "mz": "^2.7.0",
     "prompts": "^2.0.3",
     "typescript": "^3.3.3333",
     "yargs": "^13.2.2"
   },
   "devDependencies": {
+    "@types/mz": "0.0.32",
+    "@types/node": "^11.11.3",
+    "@types/prompts": "^1.2.0",
+    "@types/yargs": "^12.0.9",
     "@types/jest": "^24.0.11",
     "jest": "^24.5.0",
+    "lint-staged": "^8.1.5",
     "prettier": "^1.16.4",
     "ts-jest": "^24.0.0",
     "tslint": "^5.14.0",
     "tslint-config-prettier": "^1.18.0",
     "tslint-plugin-prettier": "^2.0.1"
+  },
+  "gitHooks": {
+    "pre-commit": "lint-staged"
+  },
+  "lint-staged": {
+    "*.ts": [
+      "npm run fix",
+      "git add"
+    ]
   }
 }
