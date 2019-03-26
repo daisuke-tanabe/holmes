@@ -213,3 +213,6 @@ holmes.config.json
 
 # map
 *.map
+
+# project
+dist
