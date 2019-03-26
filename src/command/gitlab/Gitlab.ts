@@ -145,9 +145,11 @@ ${DOUBLE_BORDER}`;
     }
 
     // クリップボードにコピーする
-    execSync(`cat <<EOF | pbcopy
+    if (this.options.copy) {
+      execSync(`cat <<EOF | pbcopy
 ${result}
 EOF`);
+    }
 
     // サイレントモードでなければ結果をコンソールに出力する
     if (!this.options.silent) {
