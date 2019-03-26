@@ -78,9 +78,9 @@ export default class Gitlab {
   }
 
   /**
-   * ブランチデータをオプションでフィルタリングする
+   * オプションに応じたブランチデータを返す
    *
-   * @param {Branch[]} branchesData - プロジェクトIDを使ってAPIから取得したブランチデータ
+   * @param branchesData {Branch[]} - プロジェクトIDを使ってAPIから取得したブランチデータ
    */
   public filteringBranches(branchesData: Branch[]) {
     return branchesData.filter(({ merged }) => {
@@ -95,21 +95,29 @@ export default class Gitlab {
   }
 
   /**
+   * オプションに応じたブランチタイプを返す
+   *
+   */
+  filteringBranchesType() {
+    if (this.options.merged && this.options.unmerged) {
+      return 'All';
+    }
+    if (this.options.merged) {
+      return 'Merged';
+    }
+    if (this.options.unmerged) {
+      return 'Unmerged';
+    }
+    return 'All';
+  }
+
+  /**
    * プロジェクト毎にブランチを表示する
    *
-   * @param {Array<MappedProject>>} mappedProjects - マッピングされたプロジェクト
+   * @param mappedProjects {Array<MappedProject>>} - マッピングされたプロジェクト
    */
   public async printProjects(mappedProjects: MappedProject[]) {
-    const createBranchesLabel = () => {
-      if (this.options.merged) {
-        return 'Merged';
-      }
-      if (this.options.unmerged) {
-        return 'Unmerged';
-      }
-      return 'All';
-    };
-    const branchesLabel = `[${createBranchesLabel()} branches]`;
+    const branchesLabel = `[${this.filteringBranchesType()} branches]`;
 
     // プロジェクト毎にループして結果を取得する
     let result = '';
@@ -150,14 +158,16 @@ EOF`);
   /**
    * プロジェクト毎にブランチの削除を行う
    *
-   * @param {Array<MappedProject>} mappedProjects - マッピングされたプロジェクト
+   * @param mappedProjects {Array<MappedProject>} - マッピングされたプロジェクト
    */
   public async deleteBranches(mappedProjects: MappedProject[]) {
-    process.stdout.write(`\n${DOUBLE_BORDER}\n`);
+    const branchesLabel = `[${this.filteringBranchesType()} branches]`;
+
+    process.stdout.write(`${DOUBLE_BORDER}\n`);
 
     // プロジェクト毎にループしてブランチを表示する
-    for (const { id, name, branches } of mappedProjects) {
-      process.stdout.write(`▼ ${name}\n`);
+    for (const { id, name: projectName, branches } of mappedProjects) {
+      process.stdout.write(`\n${projectName}\n\n${branchesLabel}\n`);
 
       // プロジェクトに紐付いたブランチデータを取得
       const branchesData = await branches.then((data) => JSON.parse(data));
@@ -167,14 +177,14 @@ EOF`);
 
       // 選択用ブランチを作成する
       const choicesBranches = filteredBranches.map(({ name: branchName, merged, commit }: Branch) => ({
-        title: `[${merged ? 'Merged' : 'Unmerged'} branch]${branchName} - ${commit.author_name}`,
+        title: `${branchName} - ${commit.author_name}`,
         value: branchName,
       }));
 
       // 選択するブランチがない場合は次のループへ
-      if (!choicesBranches) {
+      if (choicesBranches.length === 0) {
         process.stdout.write('Branches does not exist\n');
-        process.stdout.write(`${DOUBLE_BORDER}\n`);
+        process.stdout.write(`\n${DOUBLE_BORDER}\n`);
         continue;
       }
 
@@ -199,7 +209,7 @@ EOF`);
         });
       }
 
-      process.stdout.write(`${DOUBLE_BORDER}\n`);
+      process.stdout.write(`\n${DOUBLE_BORDER}\n`);
     }
   }
 }
