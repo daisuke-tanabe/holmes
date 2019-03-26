@@ -1,7 +1,7 @@
 /*
  * node_modules
  * -------------------------------------------------- */
-import { exec, execSync } from 'mz/child_process';
+import { execSync } from 'mz/child_process';
 import prompts, { PromptObject } from 'prompts';
 import querystring from 'querystring';
 
@@ -44,6 +44,8 @@ const API_V4 = `https://${config.gitlab.domain}/api/v4`;
 const QUERY_PRIVATE_TOKEN = `private_token=${config.gitlab.token}`;
 const DOUBLE_BORDER = '==================================================';
 
+import Fetch from '../utility/Fetch';
+
 export default class Gitlab {
   public config: Config;
   public options: Options;
@@ -62,36 +64,6 @@ export default class Gitlab {
   }
 
   /**
-   * GETでGitlabからデータを取得を行う
-   * unfetchモジュールではプロキシに阻まれるのかエラーになるためcurlコマンドを利用した
-   *
-   * @param {string} entryPoint - Gitlab API(https://docs.gitlab.com/ee/api/)
-   */
-  public fetchAsync(entryPoint: string): PromiseLike<any> {
-    const url = `${API_V4}${entryPoint}?${QUERY_PRIVATE_TOKEN}`;
-    return new Promise((resolve, reject) => {
-      exec(`curl -s ${url}`, (err: Error, stdout: string | Buffer, stderr: string | Buffer) => {
-        !err ? resolve(stdout) : reject(stderr);
-      });
-    });
-  }
-
-  /**
-   * DELETEでGitlabからデータ削除を行う
-   * unfetchモジュールではプロキシに阻まれるのかエラーになるためcurlコマンドを利用した
-   *
-   * @param {string} entryPoint - Gitlab API(https://docs.gitlab.com/ee/api/)
-   */
-  public deleteAsync(entryPoint: string) {
-    const url = `${API_V4}${entryPoint}?${QUERY_PRIVATE_TOKEN}`;
-    return new Promise((resolve, reject) => {
-      exec(`curl -s -X DELETE ${url}`, (err: Error, stdout: string | Buffer, stderr: string | Buffer) => {
-        !err ? resolve(stdout) : reject(stderr);
-      });
-    });
-  }
-
-  /**
    * プロジェクト（リポジトリ）毎にIDと名前、所有するブランチを設定する
    *
    * @param {Config} _config - this.config
@@ -99,7 +71,7 @@ export default class Gitlab {
   public mappingProjects(_config: Config) {
     const mappedProjects = [];
     for (const { id, name } of _config.projects) {
-      const branches = this.fetchAsync(`/projects/${id}/repository/branches`);
+      const branches = Fetch.get(`${API_V4}/projects/${id}/repository/branches?${QUERY_PRIVATE_TOKEN}`);
       mappedProjects.push({ id, name, branches });
     }
     return mappedProjects;
@@ -219,7 +191,9 @@ EOF`);
 
       // 対話で選択されたブランチを削除する処理
       for (const branchName of branchesName) {
-        const data = this.deleteAsync(`/projects/${id}/repository/branches/${querystring.escape(branchName)}`);
+        const data = Fetch.delete(
+          `${API_V4}/projects/${id}/repository/branches/${querystring.escape(branchName)}?${QUERY_PRIVATE_TOKEN}`,
+        );
         await data.then(() => {
           process.stdout.write(`Deleted: ${branchName}\n`);
         });
