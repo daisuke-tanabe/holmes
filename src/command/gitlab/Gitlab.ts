@@ -1,9 +1,11 @@
 /*
- * node_modules
+ * import
  * -------------------------------------------------- */
 import { execSync } from 'mz/child_process';
 import prompts, { PromptObject } from 'prompts';
 import querystring from 'querystring';
+import * as config from '../../../holmes.config.json';
+import Fetch from '../utility/Fetch';
 
 /*
  * interface / type
@@ -39,17 +41,13 @@ interface Config {
 /*
  * Gitlab
  * -------------------------------------------------- */
-import * as config from '../../../holmes.config.json';
 const API_V4 = `https://${config.gitlab.domain}/api/v4`;
 const QUERY_PRIVATE_TOKEN = `private_token=${config.gitlab.token}`;
 const DOUBLE_BORDER = '==================================================';
 
-import Fetch from '../utility/Fetch';
-
 export default class Gitlab {
-  public config: Config;
-  public options: Options;
-  public mappedProjects: MappedProject[];
+  private readonly config!: Config;
+  private readonly options!: Options;
 
   constructor(options: Options) {
     this.options = options;
@@ -59,8 +57,8 @@ export default class Gitlab {
       process.stdout.write('Warning: 削除モードではクリップボードのコピー機能は無効です');
     }
 
-    this.mappedProjects = this.mappingProjects(this.config);
-    this.options.remove ? this.deleteBranches(this.mappedProjects) : this.printProjects(this.mappedProjects);
+    const mappedProjects = this.mappingProjects(this.config);
+    this.options.remove ? this.deleteBranches(mappedProjects) : this.printProjects(mappedProjects);
   }
 
   /**
@@ -68,13 +66,11 @@ export default class Gitlab {
    *
    * @param {Config} _config - this.config
    */
-  public mappingProjects(_config: Config) {
-    const mappedProjects = [];
-    for (const { id, name } of _config.projects) {
+  private mappingProjects({ projects }: Config) {
+    return projects.map(({ id, name }) => {
       const branches = Fetch.get(`${API_V4}/projects/${id}/repository/branches?${QUERY_PRIVATE_TOKEN}`);
-      mappedProjects.push({ id, name, branches });
-    }
-    return mappedProjects;
+      return { id, name, branches };
+    });
   }
 
   /**
@@ -82,7 +78,7 @@ export default class Gitlab {
    *
    * @param branchesData {Branch[]} - プロジェクトIDを使ってAPIから取得したブランチデータ
    */
-  public filteringBranches(branchesData: Branch[]) {
+  private filteringBranches(branchesData: Branch[]) {
     return branchesData.filter(({ merged }) => {
       if (this.options.merged) {
         return merged;
@@ -98,14 +94,14 @@ export default class Gitlab {
    * オプションに応じたブランチタイプを返す
    *
    */
-  filteringBranchesType() {
-    if (this.options.merged && this.options.unmerged) {
+  private filteringBranchesType({ merged, unmerged }: Options) {
+    if (merged && unmerged) {
       return 'All';
     }
-    if (this.options.merged) {
+    if (merged) {
       return 'Merged';
     }
-    if (this.options.unmerged) {
+    if (unmerged) {
       return 'Unmerged';
     }
     return 'All';
@@ -114,10 +110,10 @@ export default class Gitlab {
   /**
    * プロジェクト毎にブランチを表示する
    *
-   * @param mappedProjects {Array<MappedProject>>} - マッピングされたプロジェクト
+   * @param mappedProjects {MappedProject[]} - マッピングされたプロジェクト
    */
-  public async printProjects(mappedProjects: MappedProject[]) {
-    const branchesLabel = `[${this.filteringBranchesType()} branches]`;
+  private async printProjects(mappedProjects: MappedProject[]) {
+    const branchesLabel = `[${this.filteringBranchesType(this.options)} branches]`;
 
     // プロジェクト毎にループして結果を取得する
     let result = '';
@@ -160,10 +156,10 @@ EOF`);
   /**
    * プロジェクト毎にブランチの削除を行う
    *
-   * @param mappedProjects {Array<MappedProject>} - マッピングされたプロジェクト
+   * @param mappedProjects {MappedProject[]} - マッピングされたプロジェクト
    */
-  public async deleteBranches(mappedProjects: MappedProject[]) {
-    const branchesLabel = `[${this.filteringBranchesType()} branches]`;
+  private async deleteBranches(mappedProjects: MappedProject[]) {
+    const branchesLabel = `[${this.filteringBranchesType(this.options)} branches]`;
 
     process.stdout.write(`${DOUBLE_BORDER}\n`);
 

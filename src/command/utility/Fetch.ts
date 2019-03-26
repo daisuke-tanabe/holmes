@@ -20,7 +20,7 @@ export default class Fetch {
    *
    * @param url {string} - エントリーポイントを含んだURL
    */
-  public static get(url: string)  {
+  public static get(url: string) {
     return Fetch.promiseExec(url, 'GET');
   }
 
