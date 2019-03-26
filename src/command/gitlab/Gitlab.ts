@@ -3,7 +3,7 @@
  * -------------------------------------------------- */
 import { exec } from 'mz/child_process';
 import prompts, { PromptObject } from 'prompts';
-import * as querystring from 'querystring';
+import querystring from 'querystring';
 
 /*
  * interface / type
@@ -127,7 +127,7 @@ export default class Gitlab {
       }
       return 'All';
     };
-    const branchesLabel = `${createBranchesLabel()} branches`;
+    const branchesLabel = `[${createBranchesLabel()} branches]\n`;
 
     // プロジェクト毎にループしてブランチを表示する
     for (const project of mappedProjects) {
@@ -136,17 +136,17 @@ export default class Gitlab {
       // プロジェクトに紐付いたブランチデータを取得
       const branchesData = await branches.then((data) => JSON.parse(data));
 
-      process.stdout.write(`▼ ${name}`);
-      process.stdout.write(`\n[${branchesLabel}]`);
+      process.stdout.write(`▼ ${name}\n`);
+      process.stdout.write(branchesLabel);
 
       // オプションの条件でブランチデータをフィルタリングする
       const filteredBranches = this.filteringBranches(branchesData);
 
       filteredBranches.forEach(({ name: branchName, commit }: Branch) => {
-        process.stdout.write(`- ${branchName} (Author: ${commit.author_name})`);
+        process.stdout.write(`- ${branchName} (Author: ${commit.author_name})\n`);
       });
 
-      process.stdout.write(`\n${DOUBLE_BORDER}\n`);
+      process.stdout.write(`${DOUBLE_BORDER}\n`);
     }
   }
 
@@ -160,7 +160,7 @@ export default class Gitlab {
 
     // プロジェクト毎にループしてブランチを表示する
     for (const { id, name, branches } of mappedProjects) {
-      process.stdout.write(`▼ ${name}`);
+      process.stdout.write(`▼ ${name}\n`);
 
       // プロジェクトに紐付いたブランチデータを取得
       const branchesData = await branches.then((data) => JSON.parse(data));
@@ -173,6 +173,13 @@ export default class Gitlab {
         title: `[${merged ? 'Merged' : 'Unmerged'} branch]${branchName} - ${commit.author_name}`,
         value: branchName,
       }));
+
+      // 選択するブランチがない場合は次のループへ
+      if (choicesBranches.length === 0) {
+        process.stdout.write('Branches does not exist\n');
+        process.stdout.write(`${DOUBLE_BORDER}\n`);
+        continue;
+      }
 
       // 対話形式の設定と対話の開始
       const question: Array<PromptObject<string>> = [
@@ -189,11 +196,11 @@ export default class Gitlab {
       for (const branchName of branchesName) {
         const data = this.deleteAsync(`/projects/${id}/repository/branches/${querystring.escape(branchName)}`);
         await data.then(() => {
-          process.stdout.write(`Deleted: ${branchName}`);
+          process.stdout.write(`Deleted: ${branchName}\n`);
         });
       }
 
-      process.stdout.write(`\n${DOUBLE_BORDER}\n`);
+      process.stdout.write(`${DOUBLE_BORDER}\n`);
     }
   }
 }

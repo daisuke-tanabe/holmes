@@ -3,9 +3,9 @@
 /*
  * node_modules
  * -------------------------------------------------- */
-import * as yargs from 'yargs';
-import * as pkg from '../package.json';
-import * as gitlab from './command/gitlab';
+import yargs from 'yargs';
+import pkg from '../package.json';
+import gitlab from './command/gitlab';
 
 /*
  * yargs

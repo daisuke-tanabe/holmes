@@ -4,13 +4,13 @@
   "description": "",
   "main": "index.js",
   "bin": {
-    "holmes": "./dist/index.js"
+    "holmes": "./dist/src/index.js"
   },
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "fix": "tslint --fix --project ./tsconfig.json ./src/**/*.ts",
-    "lint": "tslint --project ./tsconfig.json ./src/**/*.ts",
+    "fix": "tslint --fix --project ./tsconfig.json",
+    "lint": "tslint --project ./tsconfig.json",
     "test": "jest",
     "type-check": "tsc --watch --noEmit"
   },

@@ -9,7 +9,7 @@ import Gitlab, { Options } from './Gitlab';
  * -------------------------------------------------- */
 export default {
   builder: (yargs: Argv) => {
-    yargs.options({
+    return yargs.options({
       merged: {
         alias: 'm',
         boolean: true,
