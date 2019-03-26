@@ -10,6 +10,12 @@ import Gitlab, { Options } from './Gitlab';
 export default {
   builder: (yargs: Argv) => {
     return yargs.options({
+      copy: {
+        alias: 'c',
+        boolean: true,
+        default: false,
+        describe: '結果をクリップボードにコピーする',
+      },
       merged: {
         alias: 'm',
         boolean: true,
@@ -32,7 +38,7 @@ export default {
   },
   command: 'gitlab',
   desc: 'Gitlabの操作を行う',
-  handler: ({ remove, merged, unmerged }: Options) => {
-    new Gitlab({ remove, merged, unmerged });
+  handler: (options: Options) => {
+    new Gitlab(options);
   },
 };

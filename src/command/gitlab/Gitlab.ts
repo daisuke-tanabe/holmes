@@ -1,7 +1,7 @@
 /*
  * node_modules
  * -------------------------------------------------- */
-import { exec } from 'mz/child_process';
+import { exec, execSync } from 'mz/child_process';
 import prompts, { PromptObject } from 'prompts';
 import querystring from 'querystring';
 
@@ -9,6 +9,7 @@ import querystring from 'querystring';
  * interface / type
  * -------------------------------------------------- */
 export interface Options {
+  copy: boolean;
   remove: boolean;
   merged: boolean;
   unmerged: boolean;
@@ -50,8 +51,13 @@ export default class Gitlab {
   constructor(options: Options) {
     this.options = options;
     this.config = config.gitlab;
+
+    if(this.options.copy && this.options.remove) {
+      process.stdout.write('Warning: 削除モードではクリップボードのコピー機能は無効です');
+    }
+
     this.mappedProjects = this.mappingProjects(this.config);
-    this.options.remove ? this.deleteBranches(this.mappedProjects) : this.printResult(this.mappedProjects);
+    this.options.remove ? this.deleteBranches(this.mappedProjects) : this.printProjects(this.mappedProjects);
   }
 
   /**
@@ -98,6 +104,11 @@ export default class Gitlab {
     return mappedProjects;
   }
 
+  /**
+   * ブランチデータをオプションでフィルタリングする
+   *
+   * @param {Branch[]} branchesData - プロジェクトIDを使ってAPIから取得したブランチデータ
+   */
   public filteringBranches(branchesData: Branch[]) {
     return branchesData.filter(({ merged }) => {
       if (this.options.merged) {
@@ -115,9 +126,7 @@ export default class Gitlab {
    *
    * @param {Array<MappedProject>>} mappedProjects - マッピングされたプロジェクト
    */
-  public async printResult(mappedProjects: MappedProject[]) {
-    process.stdout.write(`\n${DOUBLE_BORDER}\n`);
-
+  public async printProjects(mappedProjects: MappedProject[]) {
     const createBranchesLabel = () => {
       if (this.options.merged) {
         return 'Merged';
@@ -127,27 +136,40 @@ export default class Gitlab {
       }
       return 'All';
     };
-    const branchesLabel = `[${createBranchesLabel()} branches]\n`;
+    const branchesLabel = `[${createBranchesLabel()} branches]`;
 
-    // プロジェクト毎にループしてブランチを表示する
+    // プロジェクト毎にループして結果を取得する
+    let result = '';
     for (const project of mappedProjects) {
-      const { name, branches } = project;
+      const { name: projectName, branches } = project;
 
       // プロジェクトに紐付いたブランチデータを取得
       const branchesData = await branches.then((data) => JSON.parse(data));
 
-      process.stdout.write(`▼ ${name}\n`);
-      process.stdout.write(branchesLabel);
-
       // オプションの条件でブランチデータをフィルタリングする
       const filteredBranches = this.filteringBranches(branchesData);
 
-      filteredBranches.forEach(({ name: branchName, commit }: Branch) => {
-        process.stdout.write(`- ${branchName} (Author: ${commit.author_name})\n`);
-      });
+      // ブランチリストを作成
+      const branchesList = filteredBranches.reduce((list, { name: branchName, commit }) => {
+        list += `- ${branchName} (Author: ${commit.author_name})\n`;
+        return list;
+      }, '');
 
-      process.stdout.write(`${DOUBLE_BORDER}\n`);
+      // 結果の文字列を足していく
+      result += `${DOUBLE_BORDER}\n
+${projectName}\n
+${branchesLabel}
+${branchesList}
+${DOUBLE_BORDER}`;
     }
+
+    // クリップボードにコピーする
+    execSync(`cat <<EOF | pbcopy
+${result}
+EOF`);
+
+    // 結果をコンソールに出力する
+    process.stdout.write(`${result}\n`);
   }
 
   /**
@@ -175,7 +197,7 @@ export default class Gitlab {
       }));
 
       // 選択するブランチがない場合は次のループへ
-      if (choicesBranches.length === 0) {
+      if (!choicesBranches) {
         process.stdout.write('Branches does not exist\n');
         process.stdout.write(`${DOUBLE_BORDER}\n`);
         continue;
