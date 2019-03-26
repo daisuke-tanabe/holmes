@@ -8,11 +8,12 @@
   },
   "scripts": {
     "build": "tsc",
+    "clean": "rm -rf ./dist",
     "dev": "tsc --watch",
     "fix": "tslint --fix --project ./tsconfig.json",
     "lint": "tslint --project ./tsconfig.json",
     "test": "jest",
-    "type-check": "tsc --watch --noEmit"
+    "type-check": "tsc --noEmit"
   },
   "engines": {
     "node": "10.15.3"
