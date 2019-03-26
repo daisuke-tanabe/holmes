@@ -2,7 +2,7 @@
  * node_modules
  * -------------------------------------------------- */
 import { exec } from 'mz/child_process';
-import * as prompts from 'prompts';
+import prompts, { PromptObject } from 'prompts';
 import * as querystring from 'querystring';
 
 /*
@@ -98,6 +98,18 @@ export default class Gitlab {
     return mappedProjects;
   }
 
+  public filteringBranches(branchesData: Branch[]) {
+    return branchesData.filter(({ merged }) => {
+      if (this.options.merged) {
+        return merged;
+      }
+      if (this.options.unmerged) {
+        return !merged;
+      }
+      return true;
+    });
+  }
+
   /**
    * プロジェクト毎にブランチを表示する
    *
@@ -128,15 +140,7 @@ export default class Gitlab {
       process.stdout.write(`\n[${branchesLabel}]`);
 
       // オプションの条件でブランチデータをフィルタリングする
-      const filteredBranches = branchesData.filter(({ merged }: Branch) => {
-        if (this.options.merged) {
-          return merged;
-        }
-        if (this.options.unmerged) {
-          return !merged;
-        }
-        return true;
-      });
+      const filteredBranches = this.filteringBranches(branchesData);
 
       filteredBranches.forEach(({ name: branchName, commit }: Branch) => {
         process.stdout.write(`- ${branchName} (Author: ${commit.author_name})`);
@@ -161,14 +165,17 @@ export default class Gitlab {
       // プロジェクトに紐付いたブランチデータを取得
       const branchesData = await branches.then((data) => JSON.parse(data));
 
+      // オプションの条件でブランチデータをフィルタリングする
+      const filteredBranches = this.filteringBranches(branchesData);
+
       // 選択用ブランチを作成する
-      const choicesBranches = branchesData.map(({ name: branchName, merged, commit }: Branch) => ({
+      const choicesBranches = filteredBranches.map(({ name: branchName, merged, commit }: Branch) => ({
         title: `[${merged ? 'Merged' : 'Unmerged'} branch]${branchName} - ${commit.author_name}`,
         value: branchName,
       }));
 
       // 対話形式の設定と対話の開始
-      const question = [
+      const question: Array<PromptObject<string>> = [
         {
           choices: choicesBranches,
           message: 'スペースで選択（複数可）、エンターで選択されたブランチを削除する',
