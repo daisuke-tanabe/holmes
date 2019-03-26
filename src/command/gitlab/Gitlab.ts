@@ -10,8 +10,9 @@ import querystring from 'querystring';
  * -------------------------------------------------- */
 export interface Options {
   copy: boolean;
-  remove: boolean;
   merged: boolean;
+  remove: boolean;
+  silent: boolean;
   unmerged: boolean;
 }
 
@@ -52,7 +53,7 @@ export default class Gitlab {
     this.options = options;
     this.config = config.gitlab;
 
-    if(this.options.copy && this.options.remove) {
+    if (this.options.copy && this.options.remove) {
       process.stdout.write('Warning: 削除モードではクリップボードのコピー機能は無効です');
     }
 
@@ -168,8 +169,10 @@ ${DOUBLE_BORDER}`;
 ${result}
 EOF`);
 
-    // 結果をコンソールに出力する
-    process.stdout.write(`${result}\n`);
+    // サイレントモードでなければ結果をコンソールに出力する
+    if (!this.options.silent) {
+      process.stdout.write(`${result}\n`);
+    }
   }
 
   /**
