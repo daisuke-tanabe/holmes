@@ -45,6 +45,7 @@ export default {
   command: 'gitlab',
   desc: 'Gitlabの操作を行う',
   handler: (options: Options) => {
-    new Gitlab(options);
+    const gitlab = new Gitlab(options);
+    gitlab.main();
   },
 };

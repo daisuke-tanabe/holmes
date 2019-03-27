@@ -4,7 +4,7 @@
 import { execSync } from 'mz/child_process';
 import prompts from 'prompts';
 import querystring from 'querystring';
-import * as config from '../../../holmes.config.json';
+import config from '../../../holmes.config.json';
 import Fetch from '../utility/Fetch';
 
 /*
@@ -18,7 +18,7 @@ export interface Options {
   unmerged: boolean;
 }
 
-interface Branch {
+export interface Branch {
   name: string;
   merged: boolean;
   commit: {
@@ -26,13 +26,19 @@ interface Branch {
   };
 }
 
-interface Project {
+export interface Project {
   id: number;
   name: string;
-  branches: PromiseLike<string>;
+  branches: Branch[];
 }
 
-interface Config {
+export interface ProjectContainedDeletionReservedBranches {
+  id: number;
+  name: string;
+  branches: string[];
+}
+
+export interface Config {
   token: string;
   domain: string;
   projects: Array<{ id: number; name: string }>;
@@ -49,66 +55,82 @@ const getApiUrl = (entryPoint: string) => `${API_V4}${entryPoint}?${QUERY_PRIVAT
 export default class Gitlab {
   private readonly config: Config;
   private readonly options: Options;
+  private projects: Project[] = [];
+  private projectsContainedRemovalBranches: ProjectContainedDeletionReservedBranches[] = [];
+  private result: string[] = [];
 
   constructor(options: Options) {
     this.options = options;
     this.config = config.gitlab;
+  }
 
+  public main() {
     if (this.options.copy && this.options.remove) {
       process.stdout.write('Warning: 削除モードではクリップボードのコピー機能は無効です');
     }
 
-    const mappedProjects = this.mappingProjects(this.config);
-    this.options.remove ? this.deleteBranches(mappedProjects) : this.printProjects(mappedProjects);
+    (async () => {
+      // this.projectsの末尾へデータを追加
+      await this.appendProjects(this.config);
+
+      // removeオプションが有効ならブランチ削除処理
+      if (this.options.remove) {
+        await this.appendDeletionReservedBranches(this.projects);
+        await this.removeBranches(this.projectsContainedRemovalBranches);
+        return;
+      }
+
+      // this.resultの末尾へデータを追加
+      await this.appendResult(this.projects);
+
+      // 文字の配列を結合
+      const result = this.result.join('');
+
+      // 結果をクリップボードにコピーする
+      if (this.options.copy) {
+        execSync(`cat <<EOF | pbcopy
+${result}
+EOF`);
+      }
+
+      // サイレントモードでなければ結果をコンソールに出力する
+      if (!this.options.silent) {
+        process.stdout.write(`${result}\n`);
+      }
+    })();
   }
 
   /**
-   * プロジェクト（リポジトリ）毎にマッピング
+   * プロジェクトデータ(this.projects)にpushする
    *
    * @param {Config} _config - this.config
    */
-  private mappingProjects({ projects }: Config) {
-    return projects.map(({ id, name }) => {
+  private async appendProjects({ projects }: Config) {
+    for (const { id, name } of projects) {
       const apiUrl = getApiUrl(`/projects/${id}/repository/branches`);
-      const branches = Fetch.get(apiUrl);
-      return { id, name, branches };
-    });
-  }
-
-  /**
-   * 選択肢ブランチのマッピング
-   *
-   * @param branches
-   */
-  private mappingChoicesBranches(branches: Branch[]) {
-    return branches.map(({ name: branchName, merged, commit }: Branch) => ({
-      title: `${branchName} - ${commit.author_name}`,
-      value: branchName,
-    }));
-  }
-
-  /**
-   * オプションに応じたブランチデータを返す
-   *
-   * @param branchesData {Branch[]} - プロジェクトIDを使ってAPIから取得したブランチデータ
-   */
-  private filteringBranches(branchesData: Branch[]) {
-    return branchesData.filter(({ merged }) => {
-      if (this.options.merged) {
-        return merged;
-      }
-      if (this.options.unmerged) {
-        return !merged;
-      }
-      return true;
-    });
+      const branchesData = Fetch.get(apiUrl);
+      const branchesJson = await branchesData.then(
+        (data) => JSON.parse(data),
+        (error) => process.stdout.write(`${error}\n`),
+      );
+      const branches = branchesJson.filter(({ merged }: Branch) => {
+        if (this.options.merged) {
+          return merged;
+        }
+        if (this.options.unmerged) {
+          return !merged;
+        }
+        return true;
+      });
+      this.projects.push({ id, name, branches });
+    }
   }
 
   /**
    * オプションに応じたブランチタイプを返す
    */
-  private filteringBranchesType() {
-    const { merged, unmerged } = this.options;
+  private filteringBranchesType(options: Options) {
+    const { merged, unmerged } = options;
     if (merged && unmerged) {
       return 'All';
     }
@@ -122,99 +144,133 @@ export default class Gitlab {
   }
 
   /**
-   * プロジェクト毎にブランチを表示する
+   * this.resultの末尾に結果を追加する
    *
-   * @param projects {Project[]} - マッピングされたプロジェクト
+   * @param projects {Project[]} - プロジェクト
    */
-  private async printProjects(projects: Project[]) {
-    const branchesLabel = `[${this.filteringBranchesType()} branches]`;
+  private async appendResult(projects: Project[]) {
+    const branchesLabel = `[${this.filteringBranchesType(this.options)} branches]`;
 
     // プロジェクト毎にループして結果を取得する
-    let result = '';
     for (const project of projects) {
       const { name: projectName, branches } = project;
-
-      // プロジェクトに紐付いたブランチデータを取得
-      const branchesData = await branches.then((data) => JSON.parse(data), (error) => process.stdout.write(error));
-
-      // オプションの条件でブランチデータをフィルタリングする
-      const filteredBranches = this.filteringBranches(branchesData);
-
-      // ブランチリストを作成
-      const branchesList = filteredBranches.reduce((list, { name: branchName, commit }) => {
+      const newBranches = branches.reduce((list, { name: branchName, commit }) => {
         list += `- ${branchName} (Author: ${commit.author_name})\n`;
         return list;
       }, '');
 
       // 結果の文字列を足していく
-      result += `${DOUBLE_BORDER}\n
+      this.result.push(`${DOUBLE_BORDER}\n
 ${projectName}\n
 ${branchesLabel}
-${branchesList}
-${DOUBLE_BORDER}`;
-    }
-
-    // クリップボードにコピーする
-    if (this.options.copy) {
-      execSync(`cat <<EOF | pbcopy
-${result}
-EOF`);
-    }
-
-    // サイレントモードでなければ結果をコンソールに出力する
-    if (!this.options.silent) {
-      process.stdout.write(`${result}\n`);
+${newBranches}
+${DOUBLE_BORDER}`);
     }
   }
 
   /**
-   * プロジェクト毎にブランチの削除を行う
+   * 削除するブランチを含んだプロジェクトデータ(this.projectsContainedRemovalBranches)にpushする
    *
-   * @param projects {Project[]} - マッピングされたプロジェクト
+   * @param projects {Project[]} - プロジェクト
    */
-  private async deleteBranches(projects: Project[]) {
-    const branchesLabel = `[${this.filteringBranchesType()} branches]`;
-
+  private async appendDeletionReservedBranches(projects: Project[]) {
     process.stdout.write(`${DOUBLE_BORDER}\n`);
+    const branchesType = this.filteringBranchesType(this.options);
+    const branchesLabel = `[${branchesType} branches]`;
 
     // プロジェクト毎にループしてブランチを表示する
-    for (const { id, name: projectName, branches } of projects) {
+    for (const { id: projectId, name: projectName, branches } of projects) {
       process.stdout.write(`\n${projectName}\n\n${branchesLabel}\n`);
 
-      // プロジェクトに紐付いたブランチデータを取得
-      const branchesData = await branches.then((data) => JSON.parse(data));
+      // ブランチの選択肢情報を作成する
+      const choicesBranches = branches.map(({ name: branchName }) => ({
+        title: branchName,
+        value: branchName,
+      }));
 
-      // オプションの条件でブランチデータをフィルタリング
-      const filteredBranches = this.filteringBranches(branchesData);
-
-      // 選択肢ブランチのマッピング
-      const mappedChoicesBranches = this.mappingChoicesBranches(filteredBranches);
-
-      // 選択肢ブランチがなかった場合は次のループへ
-      if (mappedChoicesBranches.length === 0) {
-        process.stdout.write('Branches does not exist\n');
+      // 選択肢できるブランチがなかった場合は次のループへ
+      if (choicesBranches.length === 0) {
+        process.stdout.write(`"${projectName}"には該当するブランチが存在しません\n`);
         process.stdout.write(`\n${DOUBLE_BORDER}\n`);
         continue;
       }
 
-      // 対話形式の設定
-      const { branchesName } = await prompts([
+      // 削除したいブランチを選択
+      const { removalBranches } = await prompts([
         {
-          choices: mappedChoicesBranches,
-          message: 'スペースで選択（複数可）、エンターで選択されたブランチを削除する',
-          name: 'branchesName',
+          choices: choicesBranches,
+          message: `${projectName}から削除する${branchesType.toLowerCase()}ブランチを選択してください`,
+          name: 'removalBranches',
           type: 'multiselect',
         },
       ]);
 
-      // 対話で選択されたブランチを削除する処理
-      for (const branchName of branchesName) {
-        const apiUrl = getApiUrl(`/projects/${id}/repository/branches/${querystring.escape(branchName)}`);
-        const data = Fetch.delete(apiUrl);
-        await data.then(() => process.stdout.write(`Deleted: ${branchName}\n`), (error) => process.stdout.write(error));
+      // 削除予定ブランチを含んだプロジェクトを作成
+      if (removalBranches.length !== 0) {
+        this.projectsContainedRemovalBranches.push({
+          branches: removalBranches || [],
+          id: projectId,
+          name: projectName,
+        });
       }
 
       process.stdout.write(`\n${DOUBLE_BORDER}\n`);
     }
+  }
+
+  /**
+   * 削除するブランチを含んだプロジェクトデータ(this.projectsContainedRemovalBranches)を元にしてブランチを削除する
+   *
+   * @param projects {ProjectContainedDeletionReservedBranches[]} - 削除予定ブランチを含んだプロジェクト
+   */
+  private async removeBranches(projects: ProjectContainedDeletionReservedBranches[]) {
+    process.stdout.write(`\n${DOUBLE_BORDER}\n`);
+    if (this.projectsContainedRemovalBranches.length === 0) {
+      process.stdout.write('\n削除するブランチが選択されていません\n');
+      process.stdout.write(`\n${DOUBLE_BORDER}\n`);
+      return;
+    }
+
+    // 削除予定ブランチのリストを表示する
+    process.stdout.write('\n削除予定ブランチ\n');
+    for (const { name, branches } of projects) {
+      process.stdout.write(`\n[${name}]\n`);
+      for (const branch of branches) {
+        process.stdout.write(`- ${branch}\n`);
+      }
+    }
+    process.stdout.write('\n');
+
+    // 削除するかを最終確認
+    const { isRemove } = await prompts([
+      {
+        active: 'yes',
+        inactive: 'no',
+        message: '上記の通りにブランチを削除してよろしいですか？',
+        name: 'isRemove',
+        type: 'toggle',
+      },
+    ]);
+
+    // 削除しないのならメッセージを表示して終了する
+    if (!isRemove) {
+      process.stdout.write('\nブランチの削除を行いませんでした\n');
+      process.stdout.write(`\n${DOUBLE_BORDER}\n`);
+      return;
+    }
+
+    // ブランチの削除を行う
+    for (const { id, name, branches } of projects) {
+      process.stdout.write(`\n[${name}]\n`);
+
+      for (const branch of branches) {
+        const apiUrl = getApiUrl(`/projects/${id}/repository/branches/${querystring.escape(branch)}`);
+        const data = Fetch.delete(apiUrl);
+        await data.then(() => process.stdout.write(`Deleted: ${branch}\n`), (error) => process.stdout.write(error));
+      }
+    }
+
+    process.stdout.write(`\nCompleted!!\n`);
+    process.stdout.write(`\n${DOUBLE_BORDER}\n`);
   }
 }

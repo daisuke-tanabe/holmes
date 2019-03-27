@@ -1,11 +1,10 @@
 module.exports = {
   moduleFileExtensions: [
     "ts",
-    "tsx",
     "js"
   ],
   transform: {
-    "^.+\\.(ts|tsx)$": "ts-jest"
+    "^.+\\.(ts|js)$": "ts-jest"
   },
   globals: {
     "ts-jest": {
@@ -13,6 +12,6 @@ module.exports = {
     }
   },
   testMatch: [
-    "**/__tests__/*.+(ts|tsx|js)"
-  ]
+    "**/__tests__/*.+(ts|js)"
+  ],
 };
