@@ -2,7 +2,7 @@
  * import
  * -------------------------------------------------- */
 import { execSync } from 'mz/child_process';
-import prompts, { PromptObject } from 'prompts';
+import prompts from 'prompts';
 import querystring from 'querystring';
 import * as config from '../../../holmes.config.json';
 import Fetch from '../utility/Fetch';
@@ -26,7 +26,7 @@ interface Branch {
   };
 }
 
-interface MappedProject {
+interface Project {
   id: number;
   name: string;
   branches: PromiseLike<string>;
@@ -44,10 +44,11 @@ interface Config {
 const API_V4 = `https://${config.gitlab.domain}/api/v4`;
 const QUERY_PRIVATE_TOKEN = `private_token=${config.gitlab.token}`;
 const DOUBLE_BORDER = '==================================================';
+const getApiUrl = (entryPoint: string) => `${API_V4}${entryPoint}?${QUERY_PRIVATE_TOKEN}`;
 
 export default class Gitlab {
-  private readonly config!: Config;
-  private readonly options!: Options;
+  private readonly config: Config;
+  private readonly options: Options;
 
   constructor(options: Options) {
     this.options = options;
@@ -62,15 +63,28 @@ export default class Gitlab {
   }
 
   /**
-   * プロジェクト（リポジトリ）毎にIDと名前、所有するブランチを設定する
+   * プロジェクト（リポジトリ）毎にマッピング
    *
    * @param {Config} _config - this.config
    */
   private mappingProjects({ projects }: Config) {
     return projects.map(({ id, name }) => {
-      const branches = Fetch.get(`${API_V4}/projects/${id}/repository/branches?${QUERY_PRIVATE_TOKEN}`);
+      const apiUrl = getApiUrl(`/projects/${id}/repository/branches`);
+      const branches = Fetch.get(apiUrl);
       return { id, name, branches };
     });
+  }
+
+  /**
+   * 選択肢ブランチのマッピング
+   *
+   * @param branches
+   */
+  private mappingChoicesBranches(branches: Branch[]) {
+    return branches.map(({ name: branchName, merged, commit }: Branch) => ({
+      title: `${branchName} - ${commit.author_name}`,
+      value: branchName,
+    }));
   }
 
   /**
@@ -92,9 +106,9 @@ export default class Gitlab {
 
   /**
    * オプションに応じたブランチタイプを返す
-   *
    */
-  private filteringBranchesType({ merged, unmerged }: Options) {
+  private filteringBranchesType() {
+    const { merged, unmerged } = this.options;
     if (merged && unmerged) {
       return 'All';
     }
@@ -110,18 +124,18 @@ export default class Gitlab {
   /**
    * プロジェクト毎にブランチを表示する
    *
-   * @param mappedProjects {MappedProject[]} - マッピングされたプロジェクト
+   * @param projects {Project[]} - マッピングされたプロジェクト
    */
-  private async printProjects(mappedProjects: MappedProject[]) {
-    const branchesLabel = `[${this.filteringBranchesType(this.options)} branches]`;
+  private async printProjects(projects: Project[]) {
+    const branchesLabel = `[${this.filteringBranchesType()} branches]`;
 
     // プロジェクト毎にループして結果を取得する
     let result = '';
-    for (const project of mappedProjects) {
+    for (const project of projects) {
       const { name: projectName, branches } = project;
 
       // プロジェクトに紐付いたブランチデータを取得
-      const branchesData = await branches.then((data) => JSON.parse(data));
+      const branchesData = await branches.then((data) => JSON.parse(data), (error) => process.stdout.write(error));
 
       // オプションの条件でブランチデータをフィルタリングする
       const filteredBranches = this.filteringBranches(branchesData);
@@ -156,55 +170,48 @@ EOF`);
   /**
    * プロジェクト毎にブランチの削除を行う
    *
-   * @param mappedProjects {MappedProject[]} - マッピングされたプロジェクト
+   * @param projects {Project[]} - マッピングされたプロジェクト
    */
-  private async deleteBranches(mappedProjects: MappedProject[]) {
-    const branchesLabel = `[${this.filteringBranchesType(this.options)} branches]`;
+  private async deleteBranches(projects: Project[]) {
+    const branchesLabel = `[${this.filteringBranchesType()} branches]`;
 
     process.stdout.write(`${DOUBLE_BORDER}\n`);
 
     // プロジェクト毎にループしてブランチを表示する
-    for (const { id, name: projectName, branches } of mappedProjects) {
+    for (const { id, name: projectName, branches } of projects) {
       process.stdout.write(`\n${projectName}\n\n${branchesLabel}\n`);
 
       // プロジェクトに紐付いたブランチデータを取得
       const branchesData = await branches.then((data) => JSON.parse(data));
 
-      // オプションの条件でブランチデータをフィルタリングする
+      // オプションの条件でブランチデータをフィルタリング
       const filteredBranches = this.filteringBranches(branchesData);
 
-      // 選択用ブランチを作成する
-      const choicesBranches = filteredBranches.map(({ name: branchName, merged, commit }: Branch) => ({
-        title: `${branchName} - ${commit.author_name}`,
-        value: branchName,
-      }));
+      // 選択肢ブランチのマッピング
+      const mappedChoicesBranches = this.mappingChoicesBranches(filteredBranches);
 
-      // 選択するブランチがない場合は次のループへ
-      if (choicesBranches.length === 0) {
+      // 選択肢ブランチがなかった場合は次のループへ
+      if (mappedChoicesBranches.length === 0) {
         process.stdout.write('Branches does not exist\n');
         process.stdout.write(`\n${DOUBLE_BORDER}\n`);
         continue;
       }
 
-      // 対話形式の設定と対話の開始
-      const question: Array<PromptObject<string>> = [
+      // 対話形式の設定
+      const { branchesName } = await prompts([
         {
-          choices: choicesBranches,
+          choices: mappedChoicesBranches,
           message: 'スペースで選択（複数可）、エンターで選択されたブランチを削除する',
           name: 'branchesName',
           type: 'multiselect',
         },
-      ];
-      const { branchesName } = await prompts(question);
+      ]);
 
       // 対話で選択されたブランチを削除する処理
       for (const branchName of branchesName) {
-        const data = Fetch.delete(
-          `${API_V4}/projects/${id}/repository/branches/${querystring.escape(branchName)}?${QUERY_PRIVATE_TOKEN}`,
-        );
-        await data.then(() => {
-          process.stdout.write(`Deleted: ${branchName}\n`);
-        });
+        const apiUrl = getApiUrl(`/projects/${id}/repository/branches/${querystring.escape(branchName)}`);
+        const data = Fetch.delete(apiUrl);
+        await data.then(() => process.stdout.write(`Deleted: ${branchName}\n`), (error) => process.stdout.write(error));
       }
 
       process.stdout.write(`\n${DOUBLE_BORDER}\n`);

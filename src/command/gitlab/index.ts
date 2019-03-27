@@ -1,5 +1,5 @@
 /*
- * node_modules
+ * import
  * -------------------------------------------------- */
 import { Argv } from 'yargs';
 import Gitlab, { Options } from './Gitlab';

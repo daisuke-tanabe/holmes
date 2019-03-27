@@ -1,5 +1,5 @@
 /*
- * node_modules
+ * import
  * -------------------------------------------------- */
 import { exec } from 'mz/child_process';
 

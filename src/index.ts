@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /*
- * node_modules
+ * import
  * -------------------------------------------------- */
 import yargs from 'yargs';
 import pkg from '../package.json';
