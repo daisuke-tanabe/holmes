@@ -121,7 +121,7 @@ EOF`);
 
       // サイレントモードでなければ結果をコンソールに出力する
       if (!this.options.silent) {
-        process.stdout.write(`${result}\n`);
+        process.stdout.write(`${result}`);
       }
     })();
   }
@@ -199,8 +199,7 @@ EOF`);
       this.result.push(`${DOUBLE_BORDER}\n
 ${projectName}\n
 ${branchesLabel}
-${newBranches}
-${DOUBLE_BORDER}`);
+${newBranches}\n`);
     }
   }
 
@@ -261,8 +260,7 @@ ${DOUBLE_BORDER}`);
    */
   public async removeBranches(projects: ProjectContainedRemovalBranches[]) {
     if (this.projectsContainedRemovalBranches.length === 0) {
-      process.stdout.write('\n削除するブランチが選択されていません\n');
-      process.stdout.write(`\n${DOUBLE_BORDER}\n`);
+      process.stdout.write('\n削除するブランチが選択されていません\n\n');
       return;
     }
 
@@ -289,8 +287,7 @@ ${DOUBLE_BORDER}`);
 
     // 削除しないならメッセージを表示して終了する
     if (!isRemove) {
-      process.stdout.write('\nブランチの削除を行いませんでした\n');
-      process.stdout.write(`\n${DOUBLE_BORDER}\n`);
+      process.stdout.write('\nブランチの削除を行いませんでした\n\n');
       return;
     }
 
@@ -313,7 +310,6 @@ ${DOUBLE_BORDER}`);
       }
     }
 
-    process.stdout.write('\nCompleted!!\n');
-    process.stdout.write(`\n${DOUBLE_BORDER}\n`);
+    process.stdout.write('\nCompleted!!\n\n');
   }
 }
