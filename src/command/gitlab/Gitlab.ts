@@ -69,9 +69,9 @@ const getApiUrl = (entryPoint: string) => `${API_V4}${entryPoint}?${QUERY_PRIVAT
 export default class Gitlab implements IGitlab {
   public readonly config: Config;
   public readonly options: Options;
-  public projects!: Project[];
-  public projectsContainedRemovalBranches!: ProjectContainedRemovalReservedBranches[];
-  public result!: string[];
+  public projects: Project[] = [];
+  public projectsContainedRemovalBranches: ProjectContainedRemovalReservedBranches[] = [];
+  public result: string[] = [];
 
   constructor(options: Options) {
     this.options = options;
