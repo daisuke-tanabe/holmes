@@ -82,11 +82,16 @@ export default class Gitlab implements IGitlab {
    */
   public exec() {
     if (this.options.remove && this.options.copy) {
-      process.stdout.write('Warning: "remove"オプションが真である時、"copy"オプションは無効です\n');
+      process.stdout.write('WARN: "remove"オプションが真なら、"copy"オプションは無効です\n');
     }
 
     if (this.options.remove && this.options.silent) {
-      process.stdout.write('Warning: "remove"オプションが真である時、"silent"オプションは無効です\n');
+      process.stdout.write('WARN: "remove"オプションが真なら、"silent"オプションは無効です\n');
+    }
+
+    if (this.options.remove && (this.options.merged || this.options.unmerged)) {
+      process.stdout.write('ERROR: "remove"オプションが真なら、"merged"及び"unmerged"オプションは有効にできません\n');
+      process.exit(1);
     }
 
     (async () => {
