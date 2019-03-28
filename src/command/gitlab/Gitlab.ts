@@ -2,6 +2,7 @@
  * import
  * -------------------------------------------------- */
 import { execSync } from 'mz/child_process';
+import ora from 'ora';
 import prompts from 'prompts';
 import querystring from 'querystring';
 import config from '../../../holmes.config.json';
@@ -62,6 +63,7 @@ const API_V4 = `https://${config.gitlab.domain}/api/v4`;
 const QUERY_PRIVATE_TOKEN = `private_token=${config.gitlab.token}`;
 const DOUBLE_BORDER = '==================================================';
 const getApiUrl = (entryPoint: string) => `${API_V4}${entryPoint}?${QUERY_PRIVATE_TOKEN}`;
+const spinner = ora();
 
 export default class Gitlab implements IGitlab {
   public readonly config: Config;
@@ -142,12 +144,20 @@ EOF`);
    * @param {Config} _config - this.config
    */
   public async appendProjects({ projects }: Config) {
+    process.stdout.write('\nFetching branch data ...\n\n');
     for (const { id, name } of projects) {
+      spinner.start('Fetching...');
       const apiUrl = getApiUrl(`/projects/${id}/repository/branches`);
       const branchesData = Fetch.get(apiUrl);
       const branchesJson = await branchesData.then(
-        (data) => JSON.parse(data),
-        (error) => process.stdout.write(`${error}\n`),
+        (data) => {
+          spinner.succeed(`SUCCESS: got branches data of ${name}`);
+          return JSON.parse(data);
+        },
+        (error) => {
+          spinner.fail(`FAILED: could not get branches data of ${name}`);
+          process.stdout.write(`${error}\n`);
+        },
       );
       const branches = branchesJson.filter(({ merged }: Branch) => {
         if (this.options.merged) {
@@ -160,6 +170,8 @@ EOF`);
       });
       this.projectsContainedBranches.push({ id, name, branches });
     }
+
+    process.stdout.write('\nCompleted!!\n\n');
   }
 
   /**
@@ -243,7 +255,6 @@ ${DOUBLE_BORDER}`);
    * @param projects {ProjectContainedRemovalBranches[]} - 削除予定ブランチを含んだプロジェクト
    */
   public async removeBranches(projects: ProjectContainedRemovalBranches[]) {
-    process.stdout.write(`\n${DOUBLE_BORDER}\n`);
     if (this.projectsContainedRemovalBranches.length === 0) {
       process.stdout.write('\n削除するブランチが選択されていません\n');
       process.stdout.write(`\n${DOUBLE_BORDER}\n`);
@@ -283,9 +294,17 @@ ${DOUBLE_BORDER}`);
       process.stdout.write(`\n[${projectName}]\n`);
 
       for (const branchName of branchesName) {
+        spinner.start('Fetching...');
         const apiUrl = getApiUrl(`/projects/${projectId}/repository/branches/${querystring.escape(branchName)}`);
         const data = Fetch.delete(apiUrl);
-        await data.then(() => process.stdout.write(`Deleted: ${branchName}\n`), (error) => process.stdout.write(error));
+        await data.then(
+          () => {
+            spinner.succeed(`DELETED: ${branchName}`);
+          },
+          (error) => {
+            spinner.succeed(`FAILED: ${error} - ${branchName}`);
+          },
+        );
       }
     }
 
