@@ -13,15 +13,15 @@ import Fetch from '../utility/Fetch';
 interface IGitlab {
   config: Config;
   options: Options;
-  projects: Project[];
-  projectsContainedRemovalBranches: ProjectContainedRemovalReservedBranches[];
+  projectsContainedBranches: ProjectContainedBranches[];
+  projectsContainedRemovalBranches: ProjectContainedRemovalBranches[];
   result: string[];
   exec: () => void;
   filteringBranchesType: (options: Options) => void;
   appendProjects: (config: Config) => void;
-  appendResult: (projects: Project[]) => void;
-  appendDeletionReservedBranches: (projects: Project[]) => void;
-  removeBranches: (projects: ProjectContainedRemovalReservedBranches[]) => void;
+  appendResult: (projects: ProjectContainedBranches[]) => void;
+  appendReservedBranchesToProjects: (projects: ProjectContainedBranches[]) => void;
+  removeBranches: (projects: ProjectContainedRemovalBranches[]) => void;
 }
 
 interface Config {
@@ -49,14 +49,11 @@ interface Branch {
 interface Project {
   id: number;
   name: string;
-  branches: Branch[];
 }
 
-interface ProjectContainedRemovalReservedBranches {
-  id: number;
-  name: string;
-  branchesName: string[];
-}
+type ProjectContainedBranches = Project & { branches: Branch[] };
+
+type ProjectContainedRemovalBranches = Project & { branchesName: string[] };
 
 /*
  * Gitlab
@@ -69,8 +66,8 @@ const getApiUrl = (entryPoint: string) => `${API_V4}${entryPoint}?${QUERY_PRIVAT
 export default class Gitlab implements IGitlab {
   public readonly config: Config;
   public readonly options: Options;
-  public projects: Project[] = [];
-  public projectsContainedRemovalBranches: ProjectContainedRemovalReservedBranches[] = [];
+  public projectsContainedBranches: ProjectContainedBranches[] = [];
+  public projectsContainedRemovalBranches: ProjectContainedRemovalBranches[] = [];
   public result: string[] = [];
 
   constructor(options: Options) {
@@ -97,13 +94,13 @@ export default class Gitlab implements IGitlab {
       // removeオプションが有効ならブランチ削除処理
       if (this.options.remove) {
         // this.projectsContainedRemovalBranchesにデータを追加
-        await this.appendDeletionReservedBranches(this.projects);
+        await this.appendReservedBranchesToProjects(this.projectsContainedBranches);
         await this.removeBranches(this.projectsContainedRemovalBranches);
         return;
       }
 
       // this.resultにデータを追加
-      await this.appendResult(this.projects);
+      await this.appendResult(this.projectsContainedBranches);
 
       // 文字の配列を結合
       const result = this.result.join('');
@@ -161,7 +158,7 @@ EOF`);
         }
         return true;
       });
-      this.projects.push({ id, name, branches });
+      this.projectsContainedBranches.push({ id, name, branches });
     }
   }
 
@@ -170,7 +167,7 @@ EOF`);
    *
    * @param projects {Project[]} - プロジェクト
    */
-  public async appendResult(projects: Project[]) {
+  public async appendResult(projects: ProjectContainedBranches[]) {
     const branchesLabel = `[${this.filteringBranchesType(this.options)} branches]`;
 
     // プロジェクト毎にループして結果を取得する
@@ -195,7 +192,7 @@ ${DOUBLE_BORDER}`);
    *
    * @param projects {Project[]} - プロジェクト
    */
-  public async appendDeletionReservedBranches(projects: Project[]) {
+  public async appendReservedBranchesToProjects(projects: ProjectContainedBranches[]) {
     process.stdout.write(`${DOUBLE_BORDER}\n`);
     const branchesType = this.filteringBranchesType(this.options);
     const branchesLabel = `[${branchesType} branches]`;
@@ -243,9 +240,9 @@ ${DOUBLE_BORDER}`);
   /**
    * プロジェクトデータ(this.projectsContainedRemovalBranches)を元にしてブランチを削除する
    *
-   * @param projects {ProjectContainedRemovalReservedBranches[]} - 削除予定ブランチを含んだプロジェクト
+   * @param projects {ProjectContainedRemovalBranches[]} - 削除予定ブランチを含んだプロジェクト
    */
-  public async removeBranches(projects: ProjectContainedRemovalReservedBranches[]) {
+  public async removeBranches(projects: ProjectContainedRemovalBranches[]) {
     process.stdout.write(`\n${DOUBLE_BORDER}\n`);
     if (this.projectsContainedRemovalBranches.length === 0) {
       process.stdout.write('\n削除するブランチが選択されていません\n');
