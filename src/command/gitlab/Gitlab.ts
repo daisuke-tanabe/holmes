@@ -32,10 +32,10 @@ export interface Project {
   branches: Branch[];
 }
 
-export interface ProjectContainedDeletionReservedBranches {
+export interface ProjectContainedRemovalReservedBranches {
   id: number;
   name: string;
-  branches: string[];
+  branchesName: string[];
 }
 
 export interface Config {
@@ -56,7 +56,7 @@ export default class Gitlab {
   private readonly config: Config;
   private readonly options: Options;
   private projects: Project[] = [];
-  private projectsContainedRemovalBranches: ProjectContainedDeletionReservedBranches[] = [];
+  private projectsContainedRemovalBranches: ProjectContainedRemovalReservedBranches[] = [];
   private result: string[] = [];
 
   constructor(options: Options) {
@@ -64,7 +64,10 @@ export default class Gitlab {
     this.config = config.gitlab;
   }
 
-  public main() {
+  /**
+   * 各処理を実行するメソッド
+   */
+  public exec() {
     if (this.options.remove && this.options.copy) {
       process.stdout.write('Warning: "remove"オプションが真である時、"copy"オプションは無効です\n');
     }
@@ -74,17 +77,18 @@ export default class Gitlab {
     }
 
     (async () => {
-      // this.projectsの末尾へデータを追加
+      // this.projectsにデータを追加
       await this.appendProjects(this.config);
 
       // removeオプションが有効ならブランチ削除処理
       if (this.options.remove) {
+        // this.projectsContainedRemovalBranchesにデータを追加
         await this.appendDeletionReservedBranches(this.projects);
         await this.removeBranches(this.projectsContainedRemovalBranches);
         return;
       }
 
-      // this.resultの末尾へデータを追加
+      // this.resultにデータを追加
       await this.appendResult(this.projects);
 
       // 文字の配列を結合
@@ -105,7 +109,24 @@ EOF`);
   }
 
   /**
-   * プロジェクトデータ(this.projects)にpushする
+   * オプションに応じたブランチタイプを返す
+   */
+  private filteringBranchesType(options: Options) {
+    const { merged, unmerged } = options;
+    if (merged && unmerged) {
+      return 'All';
+    }
+    if (merged) {
+      return 'Merged';
+    }
+    if (unmerged) {
+      return 'Unmerged';
+    }
+    return 'All';
+  }
+
+  /**
+   * プロジェクト(this.projects)にデータを追加する
    *
    * @param {Config} _config - this.config
    */
@@ -131,24 +152,7 @@ EOF`);
   }
 
   /**
-   * オプションに応じたブランチタイプを返す
-   */
-  private filteringBranchesType(options: Options) {
-    const { merged, unmerged } = options;
-    if (merged && unmerged) {
-      return 'All';
-    }
-    if (merged) {
-      return 'Merged';
-    }
-    if (unmerged) {
-      return 'Unmerged';
-    }
-    return 'All';
-  }
-
-  /**
-   * this.resultの末尾に結果を追加する
+   * 結果(this.result)にデータを追加する
    *
    * @param projects {Project[]} - プロジェクト
    */
@@ -173,7 +177,7 @@ ${DOUBLE_BORDER}`);
   }
 
   /**
-   * 削除するブランチを含んだプロジェクトデータ(this.projectsContainedRemovalBranches)にpushする
+   * プロジェクト(this.projectsContainedRemovalBranches)に削除予定ブランチを含んだデータを追加する
    *
    * @param projects {Project[]} - プロジェクト
    */
@@ -212,7 +216,7 @@ ${DOUBLE_BORDER}`);
       // 削除予定ブランチを含んだプロジェクトを作成
       if (removalBranches.length !== 0) {
         this.projectsContainedRemovalBranches.push({
-          branches: removalBranches || [],
+          branchesName: removalBranches || [],
           id: projectId,
           name: projectName,
         });
@@ -223,11 +227,11 @@ ${DOUBLE_BORDER}`);
   }
 
   /**
-   * 削除するブランチを含んだプロジェクトデータ(this.projectsContainedRemovalBranches)を元にしてブランチを削除する
+   * プロジェクトデータ(this.projectsContainedRemovalBranches)を元にしてブランチを削除する
    *
-   * @param projects {ProjectContainedDeletionReservedBranches[]} - 削除予定ブランチを含んだプロジェクト
+   * @param projects {ProjectContainedRemovalReservedBranches[]} - 削除予定ブランチを含んだプロジェクト
    */
-  private async removeBranches(projects: ProjectContainedDeletionReservedBranches[]) {
+  private async removeBranches(projects: ProjectContainedRemovalReservedBranches[]) {
     process.stdout.write(`\n${DOUBLE_BORDER}\n`);
     if (this.projectsContainedRemovalBranches.length === 0) {
       process.stdout.write('\n削除するブランチが選択されていません\n');
@@ -237,10 +241,10 @@ ${DOUBLE_BORDER}`);
 
     // 削除予定ブランチのリストを表示する
     process.stdout.write('\n削除予定ブランチ\n');
-    for (const { name, branches } of projects) {
-      process.stdout.write(`\n[${name}]\n`);
-      for (const branch of branches) {
-        process.stdout.write(`- ${branch}\n`);
+    for (const { name: projectName, branchesName } of projects) {
+      process.stdout.write(`\n[${projectName}]\n`);
+      for (const branchName of branchesName) {
+        process.stdout.write(`- ${branchName}\n`);
       }
     }
     process.stdout.write('\n');
@@ -256,7 +260,7 @@ ${DOUBLE_BORDER}`);
       },
     ]);
 
-    // 削除しないのならメッセージを表示して終了する
+    // 削除しないならメッセージを表示して終了する
     if (!isRemove) {
       process.stdout.write('\nブランチの削除を行いませんでした\n');
       process.stdout.write(`\n${DOUBLE_BORDER}\n`);
@@ -264,17 +268,17 @@ ${DOUBLE_BORDER}`);
     }
 
     // ブランチの削除を行う
-    for (const { id, name, branches } of projects) {
-      process.stdout.write(`\n[${name}]\n`);
+    for (const { id: projectId, name: projectName, branchesName } of projects) {
+      process.stdout.write(`\n[${projectName}]\n`);
 
-      for (const branch of branches) {
-        const apiUrl = getApiUrl(`/projects/${id}/repository/branches/${querystring.escape(branch)}`);
+      for (const branchName of branchesName) {
+        const apiUrl = getApiUrl(`/projects/${projectId}/repository/branches/${querystring.escape(branchName)}`);
         const data = Fetch.delete(apiUrl);
-        await data.then(() => process.stdout.write(`Deleted: ${branch}\n`), (error) => process.stdout.write(error));
+        await data.then(() => process.stdout.write(`Deleted: ${branchName}\n`), (error) => process.stdout.write(error));
       }
     }
 
-    process.stdout.write(`\nCompleted!!\n`);
+    process.stdout.write('\nCompleted!!\n');
     process.stdout.write(`\n${DOUBLE_BORDER}\n`);
   }
 }
