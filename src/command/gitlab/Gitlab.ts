@@ -65,8 +65,12 @@ export default class Gitlab {
   }
 
   public main() {
-    if (this.options.copy && this.options.remove) {
-      process.stdout.write('Warning: 削除モードではクリップボードのコピー機能は無効です');
+    if (this.options.remove && this.options.copy) {
+      process.stdout.write('Warning: "remove"オプションが真である時、"copy"オプションは無効です\n');
+    }
+
+    if (this.options.remove && this.options.silent) {
+      process.stdout.write('Warning: "remove"オプションが真である時、"silent"オプションは無効です\n');
     }
 
     (async () => {
