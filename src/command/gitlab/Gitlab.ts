@@ -1,12 +1,12 @@
 /*
  * import
  * -------------------------------------------------- */
+import fetch from 'isomorphic-fetch';
 import { execSync } from 'mz/child_process';
 import ora from 'ora';
 import prompts from 'prompts';
 import querystring from 'querystring';
 import config from '../../../holmes.config.json';
-import Fetch from '../utility/Fetch';
 
 /*
  * interface / type
@@ -62,6 +62,9 @@ enum StatusCode {
 /*
  * Gitlab
  * -------------------------------------------------- */
+// 証明書のエラーを無視する
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+
 const API_V4 = `https://${config.gitlab.domain}/api/v4`;
 const QUERY_PRIVATE_TOKEN = `private_token=${config.gitlab.token}`;
 const DOUBLE_BORDER = '==================================================';
@@ -153,10 +156,10 @@ EOF`);
     // configに設定されたプロジェクトのブランチを取得する
     for (const { id, name } of projects) {
       spinner.start('Fetching...');
-      const branchesData = await Fetch.get(getApiUrl(`/projects/${id}/repository/branches`)).then(
+      const branchesData = await fetch(getApiUrl(`/projects/${id}/repository/branches`)).then(
         (data) => {
           spinner.succeed(`${StatusCode[0]}: got branches data of ${name}`);
-          return JSON.parse(data);
+          return data.json();
         },
         (error) => {
           spinner.fail(`${StatusCode[2]}: could not get branches data of ${name}`);
@@ -199,7 +202,7 @@ EOF`);
     for (const project of projects) {
       const { name: projectName, branches } = project;
       const newBranches = branches.reduce((list, { name: branchName, commit }) => {
-        list += `- ${branchName} (Author: ${commit.author_name})\n`;
+        list += `- ${branchName} (Last committer: ${commit.author_name})\n`;
         return list;
       }, '');
 
@@ -315,9 +318,9 @@ ${newBranches}\n`);
       process.stdout.write(`\n[${projectName}]\n`);
       for (const { name: branchName } of branches) {
         spinner.start('Fetching...');
-        await Fetch.delete(
-          getApiUrl(`/projects/${projectId}/repository/branches/${querystring.escape(branchName)}`),
-        ).then(
+        await fetch(getApiUrl(`/projects/${projectId}/repository/branches/${querystring.escape(branchName)}`), {
+          method: 'DELETE',
+        }).then(
           () => {
             spinner.succeed(`${StatusCode[0]}: ${branchName}`);
           },

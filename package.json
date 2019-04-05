@@ -21,13 +21,17 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "isomorphic-fetch": "^2.2.1",
     "mz": "^2.7.0",
+    "node-fetch": "^2.3.0",
     "ora": "^3.2.0",
     "prompts": "^2.0.3",
     "typescript": "^3.3.3333",
+    "unfetch": "^4.1.0",
     "yargs": "^13.2.2"
   },
   "devDependencies": {
+    "@types/isomorphic-fetch": "0.0.35",
     "@types/jest": "^24.0.11",
     "@types/mz": "0.0.32",
     "@types/node": "^11.11.3",
