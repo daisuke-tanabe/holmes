@@ -318,19 +318,20 @@ ${newBranches}\n`);
       process.stdout.write(`\n[${projectName}]\n`);
       for (const { name: branchName } of branches) {
         spinner.start('Fetching...');
-        await fetch(getApiUrl(`/projects/${projectId}/repository/branches/${querystring.escape(branchName)}`), {
+
+        // 通常のエンコードだと"404 not found"になるのでスラッシュを"%252F"に変換するようにした
+        await fetch(getApiUrl(`/projects/${projectId}/repository/branches/${branchName.replace(/\//g, '%252F')}`), {
           method: 'DELETE',
         }).then(
           () => {
             spinner.succeed(`${StatusCode[0]}: ${branchName}`);
+            process.stdout.write('\nブランチの削除が完了しました\n\n');
           },
           (error) => {
             spinner.succeed(`${StatusCode[2]}: ${error} - ${branchName}`);
           },
         );
       }
-
-      process.stdout.write('\nブランチの削除が完了しました\n\n');
     }
   }
 }
