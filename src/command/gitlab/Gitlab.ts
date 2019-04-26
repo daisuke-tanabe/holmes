@@ -5,7 +5,6 @@ import fetch from 'isomorphic-fetch';
 import { execSync } from 'mz/child_process';
 import ora from 'ora';
 import prompts from 'prompts';
-import querystring from 'querystring';
 import config from '../../../holmes.config.json';
 
 /*
@@ -67,7 +66,7 @@ process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
 const API_V4 = `https://${config.gitlab.domain}/api/v4`;
 const QUERY_PRIVATE_TOKEN = `private_token=${config.gitlab.token}`;
-const DOUBLE_BORDER = '==================================================';
+const BORDER = '--------------------------------------------------';
 const getApiUrl = (entryPoint: string) => `${API_V4}${entryPoint}?${QUERY_PRIVATE_TOKEN}`;
 const spinner = ora();
 
@@ -111,7 +110,7 @@ export default class Gitlab implements IGitlab {
       // 出力データを追加
       await this.buildResultLog(this.projects);
 
-      // 文字の配列を結合
+      // 文字を結合
       const result = this.result.join('');
 
       // 結果をクリップボードにコピーする
@@ -167,19 +166,8 @@ EOF`);
         },
       );
 
-      // branchに削除用プロパティremovalを追加し
-      // optionによってマージ済みか否かでブランチをfilter
-      const branches = branchesData
-        .map((branch: Branch) => ({ ...branch, removal: false }))
-        .filter(({ merged }: Branch) => {
-          if (this.options.merged) {
-            return merged;
-          }
-          if (this.options.unmerged) {
-            return !merged;
-          }
-          return true;
-        });
+      // 各ブランチのデータにremovalプロパティを追加する
+      const branches = branchesData.map((branch: Branch) => ({ ...branch, removal: false }));
 
       // ブランチが1つでもあるならpushする
       if (branches.length > 0) {
@@ -196,21 +184,46 @@ EOF`);
    * @param projects {Project[]} - プロジェクト
    */
   public async buildResultLog(projects: Project[]) {
-    const branchesLabel = `[${this.mappingBranchesType(this.options)} branches]`;
-
-    // プロジェクト毎にループして結果を取得する
     for (const project of projects) {
       const { name: projectName, branches } = project;
-      const newBranches = branches.reduce((list, { name: branchName, commit }) => {
-        list += `- ${branchName} (Last committer: ${commit.author_name})\n`;
-        return list;
-      }, '');
 
-      // 結果の文字列を足していく
-      this.result.push(`${DOUBLE_BORDER}\n
-${projectName}\n
-${branchesLabel}
-${newBranches}\n`);
+      const { mergedBranchList, unmergedBranchList } = branches.reduce(
+        (result, branch) => {
+          const { name: branchName, commit, merged } = branch;
+
+          merged
+            ? (result.mergedBranchList += `- ${branchName} (Last committer: ${commit.author_name})\n`)
+            : (result.unmergedBranchList += `- ${branchName} (Last committer: ${commit.author_name})\n`);
+
+          return result;
+        },
+        { mergedBranchList: '', unmergedBranchList: '' },
+      );
+
+      // TODO ここ以降の書き方はいまいちかも
+      let resultLog = `${BORDER}\n\n# ${projectName}\n`;
+
+      // mergedブランチか、フィルターオプションが指定されていないなら
+      if (this.options.merged || (!this.options.merged && !this.options.unmerged)) {
+        resultLog = `${resultLog}
+## Merged branch list
+${mergedBranchList !== '' ? mergedBranchList : 'none\n'}`;
+      }
+
+      // mergedフィルターが真なら最後に改行を追加する
+      if (this.options.merged) {
+        resultLog = `${resultLog}\n`;
+      }
+
+      // unmergedブランチか、フィルターオプションが指定されていないなら
+      if (this.options.unmerged || (!this.options.merged && !this.options.unmerged)) {
+        resultLog = `${resultLog}
+## Unmerged branch list
+${unmergedBranchList !== '' ? unmergedBranchList : 'none\n'}\n`;
+      }
+
+      // 結果配列にpush
+      this.result.push(resultLog);
     }
   }
 
@@ -220,7 +233,7 @@ ${newBranches}\n`);
    * @param projects {Project[]} - プロジェクト
    */
   public async updateBranchRemovalProperty(projects: Project[]) {
-    process.stdout.write(`${DOUBLE_BORDER}\n`);
+    process.stdout.write(`${BORDER}\n`);
     const branchesType = this.mappingBranchesType(this.options);
     const branchesLabel = `[${branchesType} branches]`;
 
@@ -257,7 +270,7 @@ ${newBranches}\n`);
         });
       });
 
-      process.stdout.write(`\n${DOUBLE_BORDER}\n`);
+      process.stdout.write(`\n${BORDER}\n`);
     }
   }
 
