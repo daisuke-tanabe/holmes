@@ -5,6 +5,7 @@ import fetch from 'isomorphic-fetch';
 import { execSync } from 'mz/child_process';
 import ora from 'ora';
 import prompts from 'prompts';
+import querystring from 'querystring';
 import config from '../../../holmes.config.json';
 
 /*
@@ -17,16 +18,31 @@ interface IGitlab {
   result: string[];
   exec: () => void;
   mappingBranchesType: (options: Options) => void;
-  addBranchesProperty: (config: Config) => void;
+  addBranchesProperty: (configGitlab: ConfigGitlab) => void;
+  postTrelloCard: (result: string, { key, token, regularly }: ConfigTrello) => void;
   updateBranchRemovalProperty: (projects: Project[]) => void;
   buildResultLog: (projects: Project[]) => void;
   removeBranch: (projects: Project[]) => void;
 }
 
-interface Config {
+// TODO jsonへの型定義をしていので後で変更する
+interface ConfigGitlab {
   token: string;
   domain: string;
   projects: Array<{ id: number; name: string }>;
+}
+
+interface ConfigTrello {
+  key: string;
+  token: string;
+  regularly: {
+    checkBranch: string;
+  };
+}
+
+interface Config {
+  gitlab: ConfigGitlab;
+  trello: ConfigTrello;
 }
 
 export interface Options {
@@ -34,6 +50,7 @@ export interface Options {
   merged: boolean;
   remove: boolean;
   silent: boolean;
+  trello: boolean;
   unmerged: boolean;
 }
 
@@ -78,7 +95,7 @@ export default class Gitlab implements IGitlab {
 
   constructor(options: Options) {
     this.options = options;
-    this.config = config.gitlab;
+    this.config = config;
   }
 
   /**
@@ -95,7 +112,7 @@ export default class Gitlab implements IGitlab {
 
     (async () => {
       // プロジェクトに紐づいたブランチを追加する
-      await this.addBranchesProperty(this.config);
+      await this.addBranchesProperty(this.config.gitlab);
 
       // removeオプションが有効ならブランチ削除処理
       if (this.options.remove) {
@@ -120,8 +137,14 @@ ${result}
 EOF`);
       }
 
-      // サイレントモードでなければ結果をコンソールに出力する
-      if (!this.options.silent) {
+      // trelloへの投稿
+      if (this.options.trello) {
+        await this.postTrelloCard(result, this.config.trello);
+        return;
+      }
+
+      // サイレントモードもしくはtrello投稿と行わなければ結果をコンソールに出力する
+      if (!this.options.silent || !this.options.trello) {
         process.stdout.write(`${result}`);
       }
     })();
@@ -144,12 +167,31 @@ EOF`);
     return 'All';
   }
 
+  public async postTrelloCard(result: string, { key, token, regularly }: ConfigTrello) {
+    spinner.start('Posting...');
+    await fetch(
+      `https://api.trello.com/1/cards/${regularly.checkBranch}?desc=${querystring.escape(
+        result,
+      )}&key=${key}&token=${token}`,
+      {
+        method: 'PUT',
+      },
+    ).then(
+      () => {
+        spinner.succeed(`${StatusCode[0]}: Trelloへの投稿が完了しました\n`);
+      },
+      () => {
+        spinner.succeed(`${StatusCode[2]}: Trelloへの投稿が失敗しました\n`);
+      },
+    );
+  }
+
   /**
    * プロジェクトに紐づいたブランチを追加する
    *
    * @param {Config} _config - this.config
    */
-  public async addBranchesProperty({ projects }: Config) {
+  public async addBranchesProperty({ projects }: ConfigGitlab) {
     process.stdout.write('\nブランチデータを取得します...\n\n');
 
     // configに設定されたプロジェクトのブランチを取得する

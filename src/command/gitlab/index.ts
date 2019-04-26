@@ -34,6 +34,12 @@ export default {
         default: false,
         describe: '結果をコンソールに表示しない',
       },
+      trello: {
+        alias: 't',
+        boolean: true,
+        default: false,
+        describe: '結果をTrelloの定期カードに投稿する',
+      },
       unmerged: {
         alias: 'u',
         boolean: true,
