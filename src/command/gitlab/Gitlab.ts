@@ -84,7 +84,8 @@ process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 const API_V4 = `https://${config.gitlab.domain}/api/v4`;
 const QUERY_PRIVATE_TOKEN = `private_token=${config.gitlab.token}`;
 const BORDER = '--------------------------------------------------';
-const getApiUrl = (entryPoint: string) => `${API_V4}${entryPoint}?${QUERY_PRIVATE_TOKEN}`;
+const getApiUrl = (entryPoint: string, page = 20) =>
+  `${API_V4}${entryPoint}?${QUERY_PRIVATE_TOKEN}${page ? `&per_page=${page}` : ''}`;
 const spinner = ora();
 
 export default class Gitlab implements IGitlab {
@@ -197,7 +198,9 @@ EOF`);
     // configに設定されたプロジェクトのブランチを取得する
     for (const { id, name } of projects) {
       spinner.start('Fetching...');
-      const branchesData = await fetch(getApiUrl(`/projects/${id}/repository/branches`)).then(
+      // TODO 100件取得にしておけば全部取れると思うけど取れないのなら考える
+      // https://docs.gitlab.com/ee/api/README.html#pagination
+      const branchesData = await fetch(getApiUrl(`/projects/${id}/repository/branches`, 100)).then(
         (data) => {
           spinner.succeed(`${StatusCode[0]}: got branches data of ${name}`);
           return data.json();
