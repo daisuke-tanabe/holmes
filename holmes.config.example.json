@@ -1,0 +1,16 @@
+{
+  "gitlab": {
+    "domain": "GITLAB_DOMAIN",
+    "token": "YOUR_TOKEN",
+    "projects": [
+      { "id": 1, "name": "hoge" }
+    ]
+  },
+  "trello": {
+    "key": "YOUR_KEY",
+    "token": "YOUR_TOKEN",
+    "regularly": {
+      "checkBranch": "s"
+    }
+  }
+}
