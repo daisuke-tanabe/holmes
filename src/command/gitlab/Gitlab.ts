@@ -46,6 +46,7 @@ interface Config {
 }
 
 export interface Options {
+  all: boolean;
   copy: boolean;
   merged: boolean;
   remove: boolean;
@@ -235,6 +236,10 @@ EOF`);
       const { mergedBranchList, unmergedBranchList } = branches.reduce(
         (result, branch) => {
           const { name: branchName, commit, merged } = branch;
+
+          if (!this.options.all && /^(master|develop)$/.test(branchName)) {
+            return result;
+          }
 
           merged
             ? (result.mergedBranchList += `- ${branchName} (Last committer: ${commit.author_name})\n`)

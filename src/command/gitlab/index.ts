@@ -10,6 +10,12 @@ import Gitlab, { Options } from './Gitlab';
 export default {
   builder: (yargs: Argv) => {
     return yargs.options({
+      all: {
+        alias: 'a',
+        boolean: true,
+        default: false,
+        describe: 'すべてのブランチを表示する',
+      },
       copy: {
         alias: 'c',
         boolean: true,
